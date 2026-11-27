@@ -417,31 +417,40 @@
     };
   }
 
+  function syncContractBenefitsSchedule(profile) {
+    const todayKey = dateInputValue(new Date());
+    state.entries = state.entries.filter(item => !(
+      ['contract-thirteenth', 'contract-vacation'].includes(item.profileGeneratedKind)
+      && item.status !== 'received' && item.date >= todayKey
+    ));
+    const contractBenefits = calculateProfileIncome(profile).contractBenefits;
+    if (!contractBenefits.applicable) return;
+    const upcomingContractPayments = [
+      ['contract-thirteenth', '13º previsto em contrato', contractBenefits.thirteenth],
+      ['contract-vacation', 'Adicional de férias previsto em contrato', contractBenefits.vacation]
+    ];
+    upcomingContractPayments.forEach(([kind, description, benefit]) => {
+      if (!benefit?.date || !(benefit.amount > 0)) return;
+      const [inputYear, inputMonth, inputDay] = benefit.date.split('-').map(Number);
+      if (!inputYear || !inputMonth || !inputDay) return;
+      let paymentYear = inputYear;
+      let date = paymentDateValue(paymentYear, inputMonth - 1, inputDay);
+      const wasReceived = candidate => state.entries.some(item => item.profileGeneratedKind === kind && item.date === candidate && item.status === 'received');
+      while (date < todayKey || wasReceived(date)) date = paymentDateValue(++paymentYear, inputMonth - 1, inputDay);
+      state.entries.push({
+        id: newId(), type: 'income', description, amount: benefit.amount, date, category: '', incomeType: 'variable',
+        status: 'planned', profileGenerated: true, profileGeneratedKind: kind, createdAt: Date.now()
+      });
+    });
+  }
+
   function syncProfileIncomeSchedule(profile) {
     const today = new Date();
     const todayKey = dateInputValue(today);
     state.entries = state.entries.filter(item => !(item.profileGenerated && item.status !== 'received' && item.date >= todayKey));
 
     const calculation = calculateProfileIncome(profile);
-    const contractBenefits = calculation.contractBenefits;
-    const upcomingContractPayments = [
-      ['contract-thirteenth', '13º previsto em contrato', contractBenefits.thirteenth],
-      ['contract-vacation', 'Adicional de férias previsto em contrato', contractBenefits.vacation]
-    ];
-    if (contractBenefits.applicable) upcomingContractPayments.forEach(([kind, description, benefit]) => {
-      if (!benefit?.date || !(benefit.amount > 0)) return;
-      const [inputYear, inputMonth, inputDay] = benefit.date.split('-').map(Number);
-      if (!inputYear || !inputMonth || !inputDay) return;
-      let paymentYear = inputYear;
-      let date = paymentDateValue(paymentYear, inputMonth - 1, inputDay);
-      while (date < todayKey) date = paymentDateValue(++paymentYear, inputMonth - 1, inputDay);
-      const alreadyReceived = state.entries.some(item => item.profileGeneratedKind === kind && item.date === date && item.status === 'received');
-      if (alreadyReceived) return;
-      state.entries.push({
-        id: newId(), type: 'income', description, amount: benefit.amount, date, category: '', incomeType: 'variable',
-        status: 'planned', profileGenerated: true, profileGeneratedKind: kind, createdAt: Date.now()
-      });
-    });
+    syncContractBenefitsSchedule(profile);
     const paymentDay = Number(profile.paymentDay);
     if (!profile.profileIncomeEnabled || !calculation.hasGross || calculation.needsActivity || !(calculation.monthlyNet > 0) || paymentDay < 1 || paymentDay > 31) return;
 
@@ -917,6 +926,7 @@
       const entry = state.entries.find(item => item.id === completeButton.dataset.complete);
       if (entry) {
         entry.status = entry.type === 'income' ? 'received' : 'paid';
+        if (entry.profileGeneratedKind && state.profile.saved) syncContractBenefitsSchedule(state.profile);
         save();
         renderAll();
         showToast(entry.type === 'income' ? 'Receita marcada como recebida.' : 'Conta marcada como paga.');
