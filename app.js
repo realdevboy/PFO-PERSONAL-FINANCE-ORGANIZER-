@@ -177,6 +177,7 @@
       ? [{ id: 'legacy-variable-income', kind: 'other-income', description: 'Renda extra anterior', amount: Number(state.profile.grossVariableIncome), cadence: 'monthly' }]
       : [];
   let editingProfileExpenseId = null;
+  let editingProfileExtraSourceId = null;
   state.profile = { ...(state.profile || {}), expenseItems: profileExpenseDraft, extraSources: profileExtraSourceDraft };
   delete state.profile.expenses;
 
@@ -562,12 +563,15 @@
       const source = EXTRA_SOURCE_TYPES[item.kind] || EXTRA_SOURCE_TYPES['other-income'];
       const monthlyAmount = extraSourceMonthlyAmount(item);
       const unit = item.cadence === 'business-day' ? 'por dia útil' : 'por mês';
+      const isEditing = editingProfileExtraSourceId === item.id;
       return `<article class="profile-extra-source-row">
-        <div class="profile-extra-source-title"><strong>${escapeHTML(item.description || source.label)}</strong><span>${source.isBenefit ? 'Benefício · não entra no saldo disponível' : 'Renda em dinheiro · entra na estimativa após descontos'}</span></div>
-        <label class="field">Valor ${unit} (R$)<input data-extra-source-amount="${escapeHTML(item.id)}" type="number" min="0.01" step="0.01" inputmode="decimal" value="${Number(item.amount) || ''}" aria-label="Valor de ${escapeHTML(item.description || source.label)}"></label>
-        <label class="field">Cálculo<select data-extra-source-cadence="${escapeHTML(item.id)}"><option value="monthly"${item.cadence === 'monthly' ? ' selected' : ''}>Mensal</option><option value="business-day"${item.cadence === 'business-day' ? ' selected' : ''}>Por dia útil</option></select></label>
-        <div class="profile-extra-source-monthly"><span>Estimativa mensal</span><strong>${money(monthlyAmount)}</strong></div>
-        <button class="small-action delete" type="button" data-remove-extra-source="${escapeHTML(item.id)}" aria-label="Remover ${escapeHTML(item.description || source.label)}">Remover</button>
+        <div class="profile-extra-source-summary"><div class="profile-extra-source-title"><strong>${escapeHTML(item.description || source.label)}</strong><span>${source.label} · ${source.isBenefit ? 'benefício' : 'dinheiro'}</span></div><div class="profile-extra-source-monthly"><span>Estimativa mensal</span><strong>${money(monthlyAmount)}</strong></div>
+          <div class="profile-extra-source-actions"><button class="small-action" type="button" data-edit-extra-source="${escapeHTML(item.id)}" aria-expanded="${isEditing}" aria-controls="extra-source-edit-${escapeHTML(item.id)}">${isEditing ? 'Fechar edição' : 'Editar'}</button><button class="small-action delete" type="button" data-remove-extra-source="${escapeHTML(item.id)}" aria-label="Remover ${escapeHTML(item.description || source.label)}">Remover</button></div></div>
+        <div class="profile-extra-source-edit" id="extra-source-edit-${escapeHTML(item.id)}"${isEditing ? '' : ' hidden'}>
+          <label class="field">Nome para identificar (opcional)<input name="extraSourceName" data-extra-source-name="${escapeHTML(item.id)}" maxlength="50" autocomplete="off" value="${escapeHTML(item.description || '')}"></label>
+          <label class="field">Valor ${unit} (R$)<input name="extraSourceAmount" data-extra-source-amount="${escapeHTML(item.id)}" type="number" min="0.01" step="0.01" inputmode="decimal" autocomplete="off" value="${Number(item.amount) || ''}"></label>
+          <label class="field">Como calcular?<select name="extraSourceCadence" data-extra-source-cadence="${escapeHTML(item.id)}"><option value="monthly"${item.cadence === 'monthly' ? ' selected' : ''}>Valor mensal</option><option value="business-day"${item.cadence === 'business-day' ? ' selected' : ''}>Por dia útil</option></select></label>
+        </div>
       </article>`;
     }).join('') : '<div class="profile-list-empty">Nenhuma renda extra ou benefício adicionado.</div>';
   }
@@ -589,10 +593,13 @@
     document.getElementById('other-deductions-field').hidden = regime !== 'other';
     document.getElementById('months-worked-field').hidden = !hasEmploymentBenefits;
     document.getElementById('dependents-field').hidden = !supportsDependents;
-    document.getElementById('income-calculation-details').hidden = !hasEmploymentBenefits && !supportsDependents;
+    const hasCalculationDetails = hasEmploymentBenefits || supportsDependents || isMei || isSelfEmployed || regime === 'other';
+    const calculationDetails = document.getElementById('income-calculation-details');
+    calculationDetails.hidden = !hasCalculationDetails;
     document.getElementById('profile-regime-options').hidden = !isMixed && !isMei && !isSelfEmployed && regime !== 'public-local' && regime !== 'other';
     const grossIncome = Number(form.elements.grossFixedIncome.value) + profileExtraSourceTotals({ extraSources: profileExtraSourceDraft }).cashIncome;
     form.elements.meiActivity.required = isMei && grossIncome > 0;
+    if (isMixed || (isMei && grossIncome > 0 && !form.elements.meiActivity.value)) calculationDetails.open = true;
     const incomeScheduleEnabled = form.elements.profileIncomeEnabled.checked;
     document.getElementById('profile-income-schedule-fields').hidden = !incomeScheduleEnabled;
     const calculation = calculateProfileIncome(profileFromForm(form));
@@ -600,7 +607,6 @@
     const contractEligible = contractBenefitsEligible({ workRegime: regime, variableRegime });
     const contractDetails = document.getElementById('contract-benefits-details');
     contractDetails.hidden = !contractEligible;
-    const hasContractBenefit = form.elements.contractThirteenthEnabled.checked || form.elements.contractVacationEnabled.checked;
     document.getElementById('contract-benefit-custom-base').hidden = form.elements.contractBenefitBase.value !== 'custom';
     form.elements.contractBenefitCustomBase.required = false;
     document.getElementById('contract-thirteenth-fields').hidden = !form.elements.contractThirteenthEnabled.checked;
@@ -630,16 +636,14 @@
     const root = document.getElementById('salary-calculation');
     const result = calculateProfileIncome(profile);
     const contractPreview = contractBenefitsPreview(result);
-    const benefitSources = (profile.extraSources || []).filter(item => EXTRA_SOURCE_TYPES[item.kind]?.isBenefit);
-    const extraBenefitMarkup = benefitSources.length ? `<div class="salary-benefits-preview"><h3>Benefícios mensais estimados · fora do saldo</h3>${benefitSources.map(item => `<div><span>${escapeHTML(item.description || EXTRA_SOURCE_TYPES[item.kind].label)}${item.cadence === 'business-day' ? ` · ${money(item.amount)} por dia útil` : ''}</span><strong>${money(extraSourceMonthlyAmount(item))}</strong></div>`).join('')}<p class="salary-note">Valores por dia útil usam 22 dias como referência. Benefícios não são somados à renda em dinheiro nem ao saldo disponível.</p></div>` : '';
     if (result.needsActivity) {
-      root.innerHTML = `<div class="salary-empty">Selecione a atividade do MEI para calcular o DAS e a renda após esse desconto.</div>${contractPreview}${extraBenefitMarkup}`;
+      root.innerHTML = `<div class="salary-empty">Para estimar sua renda do MEI, abra “Ver detalhes de descontos e cálculos” e escolha sua atividade.</div>${contractPreview}`;
       return;
     }
     if (!result.hasGross) {
       root.innerHTML = result.legacyNet > 0
-        ? `<div class="salary-empty">Preencha a renda bruta para ver INSS, IRRF, 13º e férias. A renda líquida anterior continua sendo usada na estimativa de margem enquanto isso.</div>${contractPreview}${extraBenefitMarkup}`
-        : `<div class="salary-empty">Informe sua renda bruta para ver a estimativa dos descontos e benefícios aplicáveis ao regime escolhido.</div>${contractPreview}${extraBenefitMarkup}`;
+        ? `<div class="salary-empty">Informe sua renda mensal para atualizar a estimativa. Sua renda anterior continua como referência até lá.</div>${contractPreview}`
+        : `<div class="salary-empty">Adicione sua renda mensal para ver quanto pode sobrar depois dos descontos.</div>${contractPreview}`;
       return;
     }
     const meiOnly = result.regime === 'mei';
@@ -653,15 +657,15 @@
       ['Total descontado estimado', money(totalDeductions)],
       ['Renda após descontos estimados', money(result.monthlyNet)]
     ];
-    const reserveMarkup = result.reserves ? `
-      <div class="salary-reserve"><h3>Reserva mensal opcional — renda sem benefício trabalhista</h3><div><span>Para um 13º equivalente</span><strong>${money(result.reserves.thirteenthMonthly)}</strong></div><div><span>Para um mês de férias + 1/3</span><strong>${money(result.reserves.vacationMonthly)}</strong></div></div>` : '';
-    const benefitMarkup = result.thirteenth && result.vacation ? `
+    const reserveMarkup = result.reserves ? `<details class="salary-extra-details"><summary>Ver sugestão de reserva para 13º e férias (opcional)</summary>
+      <div class="salary-reserve"><h3>Quanto guardar por mês, se quiser formar essa reserva</h3><div><span>Para um 13º equivalente</span><strong>${money(result.reserves.thirteenthMonthly)}</strong></div><div><span>Para um mês de férias + 1/3</span><strong>${money(result.reserves.vacationMonthly)}</strong></div></div></details>` : '';
+    const benefitMarkup = result.thirteenth && result.vacation ? `<details class="salary-extra-details"><summary>Ver estimativa de 13º e férias</summary>
       <div class="salary-benefit-grid">
         <article class="salary-benefit"><h3>13º salário estimado</h3><div><span>Bruto</span><strong>${money(result.thirteenth.gross)}</strong></div><div><span>INSS / previdência + IRRF</span><strong>${money(result.thirteenth.pension + result.thirteenth.irrf)}</strong></div><div><span>Líquido estimado</span><strong>${money(result.thirteenth.net)}</strong></div></article>
         <article class="salary-benefit"><h3>Férias + 1/3 estimadas</h3><div><span>Total bruto</span><strong>${money(result.vacation.gross)}</strong></div><div><span>Adicional de 1/3 incluído</span><strong>${money(result.vacation.bonus)}</strong></div><div><span>INSS / previdência + IRRF</span><strong>${money(result.vacation.pension + result.vacation.irrf)}</strong></div><div><span>Líquido estimado</span><strong>${money(result.vacation.net)}</strong></div></article>
-      </div>${reserveMarkup}` : reserveMarkup;
+      </div></details>` : '';
     const notes = result.notes.map(note => `<p class="salary-note">${escapeHTML(note)}</p>`).join('');
-    root.innerHTML = `<div class="salary-calculation-heading"><strong>Confira os descontos antes de salvar</strong><span>Prévia atualizada ao preencher · estimativa pelas regras de ${TAX_YEAR}</span></div><div class="salary-metrics">${metrics.map(([label, value], index) => `<div class="salary-metric ${label.startsWith('Total descontado') ? 'salary-metric-total' : ''} ${index === metrics.length - 1 ? 'salary-metric-net' : ''}"><span>${label}</span><strong>${value}</strong></div>`).join('')}</div>${benefitMarkup}${contractPreview}${extraBenefitMarkup}${notes}`;
+    root.innerHTML = `<div class="salary-calculation-heading"><strong>Quanto deve sobrar por mês</strong><span>Estimativa, não é um valor garantido</span></div><div class="salary-net-summary"><span>Renda após descontos estimados</span><strong>${money(result.monthlyNet)}</strong></div><details class="salary-extra-details"><summary>Ver como calculamos sua renda</summary><div class="salary-metrics">${metrics.map(([label, value], index) => `<div class="salary-metric ${label.startsWith('Total descontado') ? 'salary-metric-total' : ''} ${index === metrics.length - 1 ? 'salary-metric-net' : ''}"><span>${label}</span><strong>${value}</strong></div>`).join('')}</div>${notes}</details>${benefitMarkup}${reserveMarkup}${contractPreview}`;
   }
 
   function profileCategoryTotalsHTML(items) {
@@ -682,12 +686,13 @@
     if (!root) return;
     root.innerHTML = profileExpenseDraft.length ? profileExpenseDraft.map(item => `
       <article class="profile-expense-row">
-        <div class="profile-expense-description"><strong>${escapeHTML(item.description)}</strong><span>${item.categorySource === 'auto' ? 'Categoria identificada pela descrição' : 'Categoria'}</span></div>
+        <div class="profile-expense-summary"><div class="profile-expense-description"><strong>${escapeHTML(item.description)}</strong><span>${escapeHTML(item.category || 'Outros')}</span></div>
         <div class="profile-expense-value">${editingProfileExpenseId === item.id
-          ? `<label class="sr-only" for="profile-expense-edit-${escapeHTML(item.id)}">Novo valor para ${escapeHTML(item.description)}</label><input class="profile-expense-value-input" id="profile-expense-edit-${escapeHTML(item.id)}" data-profile-expense-value="${escapeHTML(item.id)}" type="number" min="0.01" step="0.01" inputmode="decimal" value="${Number(item.amount)}"><button class="small-action" type="button" data-save-profile-expense="${escapeHTML(item.id)}">Salvar</button><button class="small-action" type="button" data-cancel-profile-expense="${escapeHTML(item.id)}">Cancelar</button>`
-          : `<strong class="profile-expense-amount">${money(item.amount)}</strong><button class="small-action" type="button" data-edit-profile-expense="${escapeHTML(item.id)}" aria-label="Editar valor de ${escapeHTML(item.description)}">Editar valor</button>`}</div>
-        <label class="profile-expense-category"><span class="sr-only">Categoria para ${escapeHTML(item.description)}</span><select data-profile-category="${escapeHTML(item.id)}" aria-label="Categoria para ${escapeHTML(item.description)}">${profileCategories.map(category => `<option${item.category === category ? ' selected' : ''}>${category}</option>`).join('')}</select></label>
+          ? `<strong class="profile-expense-amount">${money(item.amount)}</strong>`
+          : `<strong class="profile-expense-amount">${money(item.amount)}</strong><button class="small-action" type="button" data-edit-profile-expense="${escapeHTML(item.id)}" aria-label="Editar ${escapeHTML(item.description)}">Editar</button>`}</div>
         <button class="small-action delete" type="button" data-remove-profile-expense="${escapeHTML(item.id)}" aria-label="Remover despesa ${escapeHTML(item.description)}">Remover</button>
+        </div>
+        ${editingProfileExpenseId === item.id ? `<div class="profile-expense-edit"><label class="field" for="profile-expense-edit-${escapeHTML(item.id)}">Novo valor mensal (R$)<input name="profileExpenseEditAmount" class="profile-expense-value-input" id="profile-expense-edit-${escapeHTML(item.id)}" data-profile-expense-value="${escapeHTML(item.id)}" type="number" min="0.01" step="0.01" inputmode="decimal" autocomplete="off" value="${Number(item.amount)}"></label><label class="field">Categoria<select name="profileExpenseCategory" data-profile-category="${escapeHTML(item.id)}" aria-label="Categoria para ${escapeHTML(item.description)}">${profileCategories.map(category => `<option${item.category === category ? ' selected' : ''}>${category}</option>`).join('')}</select></label><div class="profile-expense-edit-actions"><button class="small-action" type="button" data-save-profile-expense="${escapeHTML(item.id)}">Salvar</button><button class="small-action" type="button" data-cancel-profile-expense="${escapeHTML(item.id)}">Cancelar</button></div></div>` : ''}
       </article>`).join('') : '<div class="profile-list-empty">Você ainda não adicionou despesas.</div>';
   }
 
@@ -752,6 +757,8 @@
   }
 
   function switchView(name) {
+    const skipTargets = { overview: 'page-title', transactions: 'transactions-title', planning: 'planning-title', goals: 'goals-title', profile: 'profile-title' };
+    document.getElementById('skip-link').href = `#${skipTargets[name] || skipTargets.overview}`;
     document.querySelectorAll('.view').forEach(view => {
       const active = view.id === `view-${name}`;
       view.hidden = !active;
@@ -810,17 +817,21 @@
   });
   const extraSourceCadence = document.getElementById('extra-source-cadence');
   extraSourceCadence.addEventListener('change', () => {
-    document.getElementById('extra-source-amount-label').firstChild.textContent = extraSourceCadence.value === 'business-day' ? 'Valor por dia útil (R$)' : 'Valor por mês (R$)';
+    document.getElementById('extra-source-amount-label').firstChild.textContent = extraSourceCadence.value === 'business-day' ? 'Quanto recebe por dia útil? (R$)' : 'Quanto recebe por mês? (R$)';
+  });
+  document.getElementById('extra-source-amount').addEventListener('input', event => {
+    if (Number(event.currentTarget.value) > 0) document.getElementById('extra-source-error').hidden = true;
   });
   document.getElementById('add-extra-source').addEventListener('click', () => {
     const kind = document.getElementById('extra-source-kind').value;
     const amountInput = document.getElementById('extra-source-amount');
     const amount = Number(amountInput.value);
     if (!(amount > 0)) {
-      showToast('Informe um valor maior que zero.');
+      document.getElementById('extra-source-error').hidden = false;
       amountInput.focus();
       return;
     }
+    document.getElementById('extra-source-error').hidden = true;
     const sourceType = EXTRA_SOURCE_TYPES[kind] || EXTRA_SOURCE_TYPES['other-income'];
     profileExtraSourceDraft.push({
       id: newId(), kind,
@@ -842,6 +853,12 @@
       source.amount = Number(amountInput.value) || 0;
       amountInput.closest('.profile-extra-source-row').querySelector('.profile-extra-source-monthly strong').textContent = money(extraSourceMonthlyAmount(source));
     }
+    const nameInput = event.target.closest('[data-extra-source-name]');
+    const namedSource = nameInput && profileExtraSourceDraft.find(item => item.id === nameInput.dataset.extraSourceName);
+    if (namedSource) {
+      namedSource.description = nameInput.value;
+      nameInput.closest('.profile-extra-source-row').querySelector('.profile-extra-source-title strong').textContent = nameInput.value || EXTRA_SOURCE_TYPES[namedSource.kind].label;
+    }
   });
   extraSourceList.addEventListener('change', event => {
     const cadenceSelect = event.target.closest('[data-extra-source-cadence]');
@@ -854,9 +871,21 @@
     renderProfileEstimate(profileFromForm(profileForm));
   });
   extraSourceList.addEventListener('click', event => {
+    const editButton = event.target.closest('[data-edit-extra-source]');
+    if (editButton) {
+      const sourceId = editButton.dataset.editExtraSource;
+      editingProfileExtraSourceId = editingProfileExtraSourceId === sourceId ? null : sourceId;
+      renderProfileExtraSourceList();
+      if (editingProfileExtraSourceId) document.querySelector(`[data-extra-source-amount="${CSS.escape(editingProfileExtraSourceId)}"]`)?.focus();
+      else document.querySelector(`[data-edit-extra-source="${CSS.escape(sourceId)}"]`)?.focus();
+      return;
+    }
     const removeButton = event.target.closest('[data-remove-extra-source]');
     if (!removeButton) return;
+    const sourceToRemove = profileExtraSourceDraft.find(item => item.id === removeButton.dataset.removeExtraSource);
+    if (!window.confirm(`Remover “${sourceToRemove?.description || 'este valor'}” do perfil?`)) return;
     profileExtraSourceDraft = profileExtraSourceDraft.filter(item => item.id !== removeButton.dataset.removeExtraSource);
+    if (editingProfileExtraSourceId === removeButton.dataset.removeExtraSource) editingProfileExtraSourceId = null;
     renderProfileExtraSourceList();
     updateProfileRegimeFields();
     renderProfileEstimate(profileFromForm(profileForm));
@@ -1027,6 +1056,8 @@
     }
     const removeProfileExpense = event.target.closest('[data-remove-profile-expense]');
     if (removeProfileExpense) {
+      const expenseToRemove = profileExpenseDraft.find(item => item.id === removeProfileExpense.dataset.removeProfileExpense);
+      if (!window.confirm(`Remover “${expenseToRemove?.description || 'esta despesa'}” do perfil?`)) return;
       profileExpenseDraft = profileExpenseDraft.filter(item => item.id !== removeProfileExpense.dataset.removeProfileExpense);
       if (editingProfileExpenseId === removeProfileExpense.dataset.removeProfileExpense) editingProfileExpenseId = null;
       renderProfileExpenseList();

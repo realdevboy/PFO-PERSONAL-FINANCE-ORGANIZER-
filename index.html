@@ -6,10 +6,11 @@
   <meta name="theme-color" content="#f5f7f4">
   <meta name="description" content="Organize rendas fixas e variáveis, contas, gastos e metas em um só lugar.">
   <title>PFO — organização financeira</title>
-  <link rel="stylesheet" href="styles.css?v=extra-income-benefits-2026-11-27">
-  <script src="app.js?v=extra-income-benefits-2026-11-27" defer></script>
+  <link rel="stylesheet" href="styles.css?v=profile-clarity-2026-11-27">
+  <script src="app.js?v=profile-clarity-2026-11-27" defer></script>
 </head>
 <body>
+  <a class="skip-link" id="skip-link" href="#page-title">Ir para o conteúdo</a>
   <div class="app-shell">
     <main class="main-area">
       <header class="topbar">
@@ -85,72 +86,77 @@
       </section>
 
       <section class="view" id="view-profile" aria-labelledby="profile-title" hidden>
-        <div class="page-heading"><div><p class="eyebrow">SEU CENÁRIO FINANCEIRO</p><h1 id="profile-title">Perfil</h1><p class="subtitle">Informe sua realidade mensal para ter uma estimativa mais próxima do seu dia a dia.</p></div></div>
-        <div class="profile-intro"><strong>Seu perfil ajuda o PFO a estimar sua margem mensal.</strong><span>Preencha apenas o que quiser. Não pedimos CPF, dados bancários ou informações que não sejam necessárias para este cálculo.</span></div>
+        <div class="page-heading"><div><p class="eyebrow">SEU CENÁRIO FINANCEIRO</p><h1 id="profile-title" tabindex="-1">Perfil</h1><p class="subtitle">Atualize suas informações para entender quanto entra e quanto sobra no mês.</p></div></div>
+        <div class="profile-intro"><strong>Vamos organizar seu dinheiro em 3 passos</strong><span>1. Conte como recebe. 2. Adicione seus gastos. 3. Salve e confira a estimativa. Você pode corrigir tudo depois; detalhes de descontos são opcionais.</span></div>
         <form id="profile-form" class="profile-form">
           <section class="profile-section" aria-labelledby="profile-about-title">
             <div class="profile-section-heading"><div><h2 id="profile-about-title">Sobre você</h2><p class="panel-subtitle">Informações básicas para personalizar sua organização.</p></div></div>
             <div class="form-grid">
-              <label class="field full">Como gostaria de ser chamado(a)?<input name="name" maxlength="50" autocomplete="given-name" placeholder="Seu nome (opcional)"></label>
-              <label class="field full">Como você trabalha?<select name="workRegime"><option value="clt">Tenho emprego com carteira assinada (CLT)</option><option value="public-federal">Sou servidor(a) público(a) federal</option><option value="public-local">Sou servidor(a) estadual ou municipal</option><option value="self-employed">Trabalho por conta própria / freelancer</option><option value="mei">Tenho um MEI</option><option value="mixed">Tenho salário e outra fonte de renda</option><option value="other">Outra situação ou não tenho certeza</option></select></label>
+              <label class="field full">Como podemos chamar você? (opcional)<input name="name" maxlength="50" autocomplete="given-name" placeholder="Seu nome"></label>
+              <label class="field full">Qual opção combina mais com você?<select name="workRegime"><option value="clt">Trabalho com carteira assinada (CLT)</option><option value="public-federal">Sou servidor(a) público(a) federal</option><option value="public-local">Sou servidor(a) estadual ou municipal</option><option value="self-employed">Trabalho por conta própria / faço freelas</option><option value="mei">Tenho um MEI</option><option value="mixed">Tenho salário e outra fonte de renda</option><option value="other">Outra situação ou não tenho certeza</option></select><span class="field-help">Essa resposta ajuda o PFO a escolher uma forma de cálculo. Você pode mudar depois.</span></label>
             </div>
           </section>
           <section class="profile-section" aria-labelledby="profile-income-title">
-            <div class="profile-section-heading"><div><h2 id="profile-income-title">Quanto você recebe por mês?</h2><p class="panel-subtitle">Informe sua renda fixa e adicione cada renda extra ou benefício separadamente.</p></div></div>
+            <div class="profile-section-heading"><div><h2 id="profile-income-title">Sua renda mensal</h2><p class="panel-subtitle">Comece pelo valor fixo. Se não tiver, pode deixar em branco e adicionar outras fontes.</p></div></div>
             <div class="form-grid">
-              <label class="field">Salário ou renda fixa mensal (R$)<input name="grossFixedIncome" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Ex.: 3.000,00"><span class="field-help">O valor antes de INSS, imposto ou outros descontos.</span></label>
+              <label class="field">Quanto recebe de forma fixa por mês? (R$)<input name="grossFixedIncome" type="number" min="0" step="0.01" inputmode="decimal" autocomplete="off" placeholder="Ex.: 3.000"><span class="field-help">Use o valor antes dos descontos. Se não souber, deixe em branco.</span></label>
             </div>
             <div class="profile-extra-income" id="profile-extra-income">
-              <div class="profile-extra-income-heading"><strong>Renda extra e benefícios</strong><span>Adicione freelas, comissões, vale-refeição ou vale-transporte.</span></div>
-              <div class="profile-extra-income-entry">
-                <label class="field">O que deseja adicionar?<select id="extra-source-kind"><option value="freelance">Freela / trabalho por fora</option><option value="commission">Comissões</option><option value="meal-benefit">Vale-refeição</option><option value="transport-benefit">Vale-transporte</option><option value="other-income">Outra renda em dinheiro</option><option value="other-benefit">Outro benefício</option></select></label>
-                <label class="field">Nome (opcional)<input id="extra-source-name" maxlength="50" placeholder="Ex.: Cliente A"></label>
-                <label class="field" id="extra-source-amount-label">Valor por mês (R$)<input id="extra-source-amount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0,00"></label>
-                <label class="field">Como o valor é calculado?<select id="extra-source-cadence"><option value="monthly">Valor fechado por mês</option><option value="business-day">Valor por dia útil</option></select></label>
-                <button class="button button-secondary" id="add-extra-source" type="button">＋ Adicionar</button>
-              </div>
-              <p class="field-help profile-extra-income-note">Valores por dia útil usam 22 dias úteis como referência mensal. Feriados não são descontados. Freelas e comissões entram na estimativa de renda após descontos; vales e outros benefícios ficam separados do dinheiro disponível.</p>
+              <div class="profile-extra-income-heading"><strong>Outros valores que você recebe</strong><span>Freelas, comissões e benefícios como vale-refeição e vale-transporte.</span></div>
+              <details class="profile-extra-income-add">
+                <summary>＋ Adicionar renda extra ou benefício</summary>
+                <div class="profile-extra-income-entry">
+                  <label class="field">O que deseja adicionar?<select id="extra-source-kind" name="extraSourceKind"><option value="freelance">Freela / trabalho por fora</option><option value="commission">Comissões</option><option value="meal-benefit">Vale-refeição</option><option value="transport-benefit">Vale-transporte</option><option value="other-income">Outra renda em dinheiro</option><option value="other-benefit">Outro benefício</option></select></label>
+                  <label class="field">Nome para identificar (opcional)<input id="extra-source-name" name="extraSourceNameDraft" maxlength="50" autocomplete="off" placeholder="Ex.: Cliente A"></label>
+                  <label class="field" id="extra-source-amount-label">Quanto recebe por mês? (R$)<input id="extra-source-amount" name="extraSourceAmountDraft" type="number" min="0.01" step="0.01" inputmode="decimal" autocomplete="off" placeholder="Ex.: 500"></label>
+                  <label class="field">Como calcular?<select id="extra-source-cadence" name="extraSourceCadenceDraft"><option value="monthly">Valor fechado por mês</option><option value="business-day">Valor por dia útil</option></select></label>
+                  <button class="button button-secondary" id="add-extra-source" type="button">Adicionar</button>
+                </div>
+                <p class="form-error" id="extra-source-error" role="alert" hidden>Informe um valor maior que zero.</p>
+                <p class="field-help profile-extra-income-note">Para valores por dia útil, usamos 22 dias como referência mensal. O valor dos benefícios fica separado do dinheiro disponível.</p>
+              </details>
               <div id="profile-extra-income-list" class="profile-extra-income-list" aria-live="polite"></div>
             </div>
             <div class="profile-income-schedule" id="profile-income-schedule">
-              <label class="checkbox-field"><input name="profileIncomeEnabled" type="checkbox" checked>Adicionar minha renda após descontos ao painel como previsão mensal</label>
+              <label class="checkbox-field"><input name="profileIncomeEnabled" type="checkbox" checked>Prever minha renda após descontos no painel</label>
               <div class="profile-income-schedule-fields" id="profile-income-schedule-fields">
-                <label class="field">Em que dia costuma receber?<input name="paymentDay" type="number" min="1" max="31" step="1" inputmode="numeric" placeholder="Ex.: 5"><span class="field-help">Nos meses mais curtos, o PFO usa o último dia do mês.</span></label>
-                <p class="field-help profile-income-schedule-note">A renda aparecerá como prevista. Ela só entra no saldo disponível quando você marcar o recebimento como confirmado.</p>
+                <label class="field">Em qual dia do mês costuma receber?<input name="paymentDay" type="number" min="1" max="31" step="1" inputmode="numeric" autocomplete="off" placeholder="Ex.: 5"><span class="field-help">Se variar, informe o dia mais comum.</span></label>
+                <p class="field-help profile-income-schedule-note">Ela aparece como prevista e só entra no saldo quando você marcar que recebeu.</p>
               </div>
             </div>
             <details class="profile-calculation-details" id="income-calculation-details">
-              <summary>Quero ajustar outros detalhes (opcional)</summary>
+              <summary>Ver detalhes de descontos e cálculos (opcional)</summary>
+              <p class="field-help">Se não souber algum dado, mantenha a opção atual ou deixe o campo em branco. O PFO mostrará uma estimativa.</p>
               <div class="form-grid">
-                <label class="field" id="months-worked-field">Meses trabalhados neste ano<input name="monthsWorked" type="number" min="1" max="12" step="1" value="12"><span class="field-help">Usado para estimar o 13º e as férias proporcionais.</span></label>
-                <label class="field" id="dependents-field">Número de dependentes no Imposto de Renda<input name="dependents" type="number" min="0" max="20" step="1" value="0"><span class="field-help">Se não tiver dependentes, mantenha 0.</span></label>
+                <label class="field" id="months-worked-field">Quantos meses trabalhou neste ano?<input name="monthsWorked" type="number" min="1" max="12" step="1" value="12" autocomplete="off"><span class="field-help">Ajuda a estimar 13º e férias proporcionais.</span></label>
+                <label class="field" id="dependents-field">Quantos dependentes informa no Imposto de Renda?<input name="dependents" type="number" min="0" max="20" step="1" value="0" autocomplete="off"><span class="field-help">Se não tiver, mantenha 0.</span></label>
+              </div>
+              <p class="form-note profile-legacy-note" id="mixed-income-note" hidden>Você informou mais de uma fonte. Escolha como o PFO deve calcular a renda extra.</p>
+              <div class="form-grid profile-regime-options" id="profile-regime-options">
+                <label class="field full" id="mixed-variable-field" hidden>Como recebe a renda extra?<select name="variableRegime"><option value="clt">Também é salário CLT</option><option value="self-employed">Trabalho autônomo ou freelancer</option><option value="mei">Receita do meu MEI</option></select></label>
+                <label class="field full" id="mei-activity-field" hidden>Qual atividade do MEI?<select name="meiActivity"><option value="">Selecione uma opção</option><option value="service">Presto serviços</option><option value="commerce">Trabalho com comércio ou indústria</option><option value="both">Faço serviços e comércio</option><option value="haul">Sou MEI caminhoneiro</option></select><span class="field-help">Escolha a opção que mais combina com sua atividade.</span></label>
+                <label class="field full" id="independent-contribution-field" hidden>Como contribui para o INSS?<select name="contributionMode"><option value="20">Plano normal — 20% da renda, respeitando os limites</option><option value="11">Plano simplificado — 11% do salário mínimo</option><option value="none">Não incluir contribuição nesta estimativa</option></select></label>
+                <label class="field full" id="public-pension-field" hidden>Quanto descontam de previdência no seu contracheque? (R$)<input name="publicPension" type="number" min="0" step="0.01" inputmode="decimal" autocomplete="off" placeholder="Ex.: 500"></label>
+                <label class="field full" id="other-deductions-field" hidden>Outros descontos mensais que conhece (R$)<input name="otherDeductions" type="number" min="0" step="0.01" inputmode="decimal" autocomplete="off" placeholder="Se não tiver, deixe em branco"></label>
               </div>
             </details>
             <p class="form-note profile-legacy-note" id="profile-legacy-income-note" hidden></p>
-            <p class="form-note profile-legacy-note" id="mixed-income-note" hidden>Na renda combinada, a parte fixa é calculada como salário CLT. Escolha de onde vem a renda extra.</p>
-            <div class="form-grid profile-regime-options" id="profile-regime-options">
-              <label class="field full" id="mixed-variable-field" hidden>De onde vem sua renda extra?<select name="variableRegime"><option value="clt">Também é salário CLT</option><option value="self-employed">Trabalho autônomo ou freelancer</option><option value="mei">Receita do meu MEI</option></select></label>
-              <label class="field full" id="mei-activity-field" hidden>Qual atividade do MEI?<select name="meiActivity"><option value="">Selecione uma opção</option><option value="service">Presto serviços</option><option value="commerce">Trabalho com comércio ou indústria</option><option value="both">Faço serviços e comércio</option><option value="haul">Sou MEI caminhoneiro</option></select><span class="field-help">Essa escolha ajuda a estimar o valor do DAS mensal.</span></label>
-              <label class="field full" id="independent-contribution-field" hidden>Como você contribui para o INSS?<select name="contributionMode"><option value="20">Plano normal — 20% da renda, respeitando os limites</option><option value="11">Plano simplificado — 11% do salário mínimo</option><option value="none">Não incluir contribuição nesta estimativa</option></select><span class="field-help">Se não souber qual plano usa, confira no Meu INSS ou deixe sem calcular por enquanto.</span></label>
-              <label class="field full" id="public-pension-field" hidden>Previdência descontada no contracheque (R$)<input name="publicPension" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Digite o valor mensal"><span class="field-help">Encontre esse valor no seu contracheque. Se não souber, deixe em branco.</span></label>
-              <label class="field full" id="other-deductions-field" hidden>Outros descontos mensais que você conhece (R$)<input name="otherDeductions" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Se não tiver, deixe em 0"></label>
-            </div>
             <details class="profile-calculation-details profile-contract-benefits" id="contract-benefits-details" hidden>
-              <summary>Tenho valores extras acertados em contrato (opcional)</summary>
+              <summary>Meu contrato prevê outros pagamentos, como 13º ou férias</summary>
               <p class="field-help">Cadastre valores e datas que constam no seu contrato para prevê-los no painel. O PFO não classifica a relação de trabalho nem calcula tributos desses pagamentos extras.</p>
               <label class="field contract-benefit-base-field">Qual valor mensal serve de base?<select name="contractBenefitBase"><option value="gross">Minha renda antes dos descontos</option><option value="net">Minha renda após os descontos estimados</option><option value="custom">Outro valor mensal combinado</option></select><span class="field-help">Confira no contrato qual valor deve ser usado no cálculo.</span></label>
-              <label class="field contract-benefit-custom-base" id="contract-benefit-custom-base" hidden>Valor mensal combinado no contrato (R$)<input name="contractBenefitCustomBase" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="Ex.: 5.000,00"></label>
+              <label class="field contract-benefit-custom-base" id="contract-benefit-custom-base" hidden>Valor mensal combinado no contrato (R$)<input name="contractBenefitCustomBase" type="number" min="0.01" step="0.01" inputmode="decimal" autocomplete="off" placeholder="Ex.: 5.000"></label>
               <div class="contract-benefit-option">
                 <label class="checkbox-field"><input name="contractThirteenthEnabled" type="checkbox">Meu contrato prevê um pagamento anual equivalente ao 13º</label>
                 <div class="form-grid contract-benefit-fields" id="contract-thirteenth-fields" hidden>
-                  <label class="field">Percentual da base<input name="contractThirteenthPercent" type="number" min="0.01" max="1000" step="0.01" value="100"><span class="field-help">100% equivale a uma mensalidade inteira.</span></label>
+                  <label class="field">Percentual da base<input name="contractThirteenthPercent" type="number" min="0.01" max="1000" step="0.01" value="100" autocomplete="off"><span class="field-help">100% equivale a uma mensalidade inteira.</span></label>
                   <label class="field">Data prevista para o próximo pagamento<input name="contractThirteenthDate" type="date"><span class="field-help">Depois, o PFO prevê a repetição anual nessa data.</span></label>
                 </div>
               </div>
               <div class="contract-benefit-option">
                 <label class="checkbox-field"><input name="contractVacationEnabled" type="checkbox">Meu contrato prevê um adicional de férias</label>
                 <div class="form-grid contract-benefit-fields" id="contract-vacation-fields" hidden>
-                  <label class="field">Percentual da base<input name="contractVacationPercent" type="number" min="0.01" max="1000" step="0.01" value="33.33"><span class="field-help">33,33% equivale a aproximadamente um terço.</span></label>
+                  <label class="field">Percentual da base<input name="contractVacationPercent" type="number" min="0.01" max="1000" step="0.01" value="33.33" autocomplete="off"><span class="field-help">33,33% equivale a aproximadamente um terço.</span></label>
                   <label class="field">Data prevista para o próximo pagamento<input name="contractVacationDate" type="date"><span class="field-help">Depois, o PFO prevê a repetição anual nessa data.</span></label>
                 </div>
               </div>
@@ -158,22 +164,22 @@
             <div id="salary-calculation" class="salary-calculation" aria-live="polite"></div>
           </section>
           <section class="profile-section" aria-labelledby="profile-expenses-title">
-            <div class="profile-section-heading"><div><h2 id="profile-expenses-title">Gastos pessoais mensais</h2><p class="panel-subtitle">Adicione cada despesa. O PFO sugere uma categoria pela descrição e agrupa os valores para você.</p></div></div>
+            <div class="profile-section-heading"><div><h2 id="profile-expenses-title">Seus gastos mensais</h2><p class="panel-subtitle">Adicione os gastos que se repetem ou que quer considerar no seu planejamento.</p></div></div>
             <div class="profile-expense-entry">
-              <label class="field">O que você paga?<input id="profile-expense-description" maxlength="70" placeholder="Ex.: aluguel, mercado, internet"></label>
-              <label class="field">Valor mensal (R$)<input id="profile-expense-amount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0,00"></label>
-              <button class="button button-secondary" id="add-profile-expense" type="button">＋ Adicionar despesa</button>
+              <label class="field">Nome do gasto<input id="profile-expense-description" name="profileExpenseDescription" maxlength="70" autocomplete="off" placeholder="Ex.: aluguel, mercado"></label>
+              <label class="field">Quanto custa por mês? (R$)<input id="profile-expense-amount" name="profileExpenseAmount" type="number" min="0.01" step="0.01" inputmode="decimal" autocomplete="off" placeholder="Ex.: 1.300"></label>
+              <button class="button button-secondary" id="add-profile-expense" type="button">＋ Adicionar gasto</button>
             </div>
-            <p class="profile-classifier-note">Exemplos: “aluguel” → Moradia, “mercado” → Alimentação, “Uber” → Transporte. A sugestão é feita localmente por palavras-chave; revise e ajuste se precisar.</p>
+            <p class="profile-classifier-note">O PFO sugere uma categoria pelo nome do gasto. Você pode conferir e mudar a categoria depois.</p>
             <div id="profile-expense-list" class="profile-expense-list" aria-live="polite"></div>
-            <div class="profile-category-summary-wrap"><h3>Totais por categoria</h3><div id="profile-expense-summary" class="profile-category-summary"></div></div>
+            <div class="profile-category-summary-wrap"><h3>Quanto vai para cada categoria?</h3><div id="profile-expense-summary" class="profile-category-summary"></div></div>
             <p class="form-note profile-note">Esta lista é uma referência mensal do perfil. Para acompanhar o saldo real, registre cada pagamento em Movimentações ou Contas; os mesmos valores não são somados novamente ao saldo.</p>
           </section>
           <section class="profile-section profile-estimate-section" aria-labelledby="profile-estimate-title">
-            <div class="profile-section-heading"><div><h2 id="profile-estimate-title">Sua estimativa mensal</h2><p class="panel-subtitle">Renda de referência menos gastos pessoais de referência.</p></div></div>
+            <div class="profile-section-heading"><div><h2 id="profile-estimate-title">Resumo do mês</h2><p class="panel-subtitle">Veja a renda que sobra depois dos gastos. Benefícios aparecem à parte.</p></div></div>
             <div id="profile-estimate" class="profile-estimate" aria-live="polite"></div>
           </section>
-          <div class="profile-save-row"><span>Os dados ficam salvos neste navegador.</span><button class="button button-primary" type="submit">Salvar perfil</button></div>
+          <div class="profile-save-row"><span>Clique em “Salvar perfil” para guardar suas alterações neste navegador.</span><button class="button button-primary" type="submit">Salvar perfil</button></div>
         </form>
       </section>
     </main>
