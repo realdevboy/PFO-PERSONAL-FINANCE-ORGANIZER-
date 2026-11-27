@@ -126,6 +126,29 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .planning-strip span { color: var(--muted); font-size: 13px; }
 .planning-count { margin-left: auto; }
 .goals-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 26px; }
+.profile-projection { margin-top: 29px; }
+.profile-empty { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 13px; color: var(--muted); font-size: 14px; }
+.profile-empty .text-button { white-space: nowrap; }
+.profile-overview { margin-top: 13px; }
+.profile-regime { margin-bottom: 12px; color: var(--muted); font-size: 13px; }
+.profile-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line); }
+.profile-metric { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 12px 14px 12px 0; border-bottom: 1px solid var(--line); }
+.profile-metric span { color: var(--muted); font-size: 12px; }
+.profile-metric strong { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.profile-metric-negative strong { color: var(--warning); }
+.profile-intro { display: grid; gap: 5px; margin: 0 0 22px; padding: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.profile-intro strong { font-size: 15px; font-weight: 600; }
+.profile-intro span { color: var(--muted); font-size: 13px; }
+.profile-form { display: grid; gap: 0; }
+.profile-section { padding: 20px 0 22px; border-bottom: 1px solid var(--line); }
+.profile-section-heading { margin-bottom: 15px; }
+.profile-section-heading h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.02em; }
+.profile-section .form-grid { max-width: 690px; }
+.profile-note { margin: 15px 0 0; }
+.profile-estimate { max-width: 690px; }
+.profile-calculation-note { grid-column: 1 / -1; margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+.profile-save-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 18px 0; }
+.profile-save-row > span { color: var(--muted); font-size: 12px; }
 .goal-card { padding: 17px 0 20px; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; }
 .goal-card-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .goal-icon { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 19px; }
@@ -182,6 +205,11 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   .summary-card { margin-bottom: 23px; }
   .panel { padding-bottom: 20px; }
   .income-list, .goals-grid { grid-template-columns: 1fr; }
+  .profile-metrics { grid-template-columns: 1fr; }
+  .profile-metric { flex-direction: row; align-items: baseline; justify-content: space-between; gap: 10px; padding-right: 0; }
+  .profile-empty { align-items: flex-start; flex-direction: column; gap: 5px; }
+  .profile-save-row { align-items: stretch; flex-direction: column; }
+  .profile-save-row .button { width: 100%; }
   .transaction-row { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 9px; }
   .transaction-main { grid-row: 1 / 3; }
   .transaction-amount { grid-column: 2; grid-row: 1; }
