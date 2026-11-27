@@ -102,17 +102,16 @@
             </div>
           </section>
           <section class="profile-section" aria-labelledby="profile-expenses-title">
-            <div class="profile-section-heading"><div><h2 id="profile-expenses-title">Gastos pessoais mensais</h2><p class="panel-subtitle">Estimativas por categoria, mesmo que ainda não tenha registrado os lançamentos.</p></div></div>
-            <div class="form-grid profile-expenses">
-              <label class="field">Moradia (R$)<input name="housing" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00"></label>
-              <label class="field">Alimentação (R$)<input name="food" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00"></label>
-              <label class="field">Contas e serviços (R$)<input name="bills" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00"></label>
-              <label class="field">Transporte (R$)<input name="transport" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00"></label>
-              <label class="field">Saúde e educação (R$)<input name="healthEducation" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00"></label>
-              <label class="field">Pessoais e lazer (R$)<input name="personal" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00"></label>
-              <label class="field">Outros (R$)<input name="other" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00"></label>
+            <div class="profile-section-heading"><div><h2 id="profile-expenses-title">Gastos pessoais mensais</h2><p class="panel-subtitle">Adicione cada despesa. O PFO sugere uma categoria pela descrição e agrupa os valores para você.</p></div></div>
+            <div class="profile-expense-entry">
+              <label class="field">O que você paga?<input id="profile-expense-description" maxlength="70" placeholder="Ex.: aluguel, mercado, internet"></label>
+              <label class="field">Valor mensal (R$)<input id="profile-expense-amount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0,00"></label>
+              <button class="button button-secondary" id="add-profile-expense" type="button">＋ Adicionar despesa</button>
             </div>
-            <p class="form-note profile-note">Esses valores servem para a estimativa do perfil. Registre cada despesa em Movimentações ou Contas para que ela entre no acompanhamento do saldo real; assim, não há contagem duplicada.</p>
+            <p class="profile-classifier-note">A categoria é identificada localmente pela descrição. Confira a sugestão e ajuste se necessário.</p>
+            <div id="profile-expense-list" class="profile-expense-list" aria-live="polite"></div>
+            <div class="profile-category-summary-wrap"><h3>Totais por categoria</h3><div id="profile-expense-summary" class="profile-category-summary"></div></div>
+            <p class="form-note profile-note">Esta lista é uma referência mensal do perfil. Para acompanhar o saldo real, registre cada pagamento em Movimentações ou Contas; os mesmos valores não são somados novamente ao saldo.</p>
           </section>
           <section class="profile-section profile-estimate-section" aria-labelledby="profile-estimate-title">
             <div class="profile-section-heading"><div><h2 id="profile-estimate-title">Sua estimativa mensal</h2><p class="panel-subtitle">Renda de referência menos gastos pessoais de referência.</p></div></div>
