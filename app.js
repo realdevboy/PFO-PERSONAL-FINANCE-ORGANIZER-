@@ -1,6 +1,15 @@
 (() => {
   const STORAGE_KEY = 'em-ordem-financas-v1';
   const categories = ['Moradia', 'Alimentação', 'Transporte', 'Saúde', 'Educação', 'Lazer', 'Contas', 'Compras', 'Outros'];
+  const EXTRA_SOURCE_TYPES = {
+    freelance: { label: 'Freela / trabalho por fora', isBenefit: false },
+    commission: { label: 'Comissões', isBenefit: false },
+    'meal-benefit': { label: 'Vale-refeição', isBenefit: true },
+    'transport-benefit': { label: 'Vale-transporte', isBenefit: true },
+    'other-income': { label: 'Outra renda em dinheiro', isBenefit: false },
+    'other-benefit': { label: 'Outro benefício', isBenefit: true }
+  };
+  const AVERAGE_BUSINESS_DAYS = 22;
   const today = new Date();
   let selectedMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   let toastTimer;
@@ -162,8 +171,13 @@
       const [category, description] = legacyExpenseCategories[key] || legacyExpenseCategories.other;
       return { id: `legacy-${index}`, description, amount: Number(amount), category, categorySource: 'manual' };
     });
+  let profileExtraSourceDraft = Array.isArray(state.profile?.extraSources)
+    ? state.profile.extraSources.map(item => ({ ...item, id: String(item.id || newId()), kind: EXTRA_SOURCE_TYPES[item.kind] ? item.kind : 'other-income', cadence: item.cadence === 'business-day' ? 'business-day' : 'monthly' }))
+    : Number(state.profile?.grossVariableIncome) > 0
+      ? [{ id: 'legacy-variable-income', kind: 'other-income', description: 'Renda extra anterior', amount: Number(state.profile.grossVariableIncome), cadence: 'monthly' }]
+      : [];
   let editingProfileExpenseId = null;
-  state.profile = { ...(state.profile || {}), expenseItems: profileExpenseDraft };
+  state.profile = { ...(state.profile || {}), expenseItems: profileExpenseDraft, extraSources: profileExtraSourceDraft };
   delete state.profile.expenses;
 
   function classifyProfileExpense(description) {
@@ -236,6 +250,22 @@
     return { inss, icms, iss, total: roundMoney(inss + icms + iss) };
   }
 
+  function extraSourceMonthlyAmount(item) {
+    const amount = Math.max(0, Number(item.amount) || 0);
+    return roundMoney(item.cadence === 'business-day' ? amount * AVERAGE_BUSINESS_DAYS : amount);
+  }
+
+  function profileExtraSourceTotals(profile) {
+    const sources = Array.isArray(profile.extraSources) ? profile.extraSources : [];
+    return sources.reduce((totals, item) => {
+      const sourceType = EXTRA_SOURCE_TYPES[item.kind] || EXTRA_SOURCE_TYPES['other-income'];
+      const monthlyAmount = extraSourceMonthlyAmount(item);
+      if (sourceType.isBenefit) totals.benefits += monthlyAmount;
+      else totals.cashIncome += monthlyAmount;
+      return totals;
+    }, { cashIncome: 0, benefits: 0 });
+  }
+
   function contractBenefitsEligible(profile) {
     if (['self-employed', 'mei', 'other'].includes(profile.workRegime)) return true;
     return profile.workRegime === 'mixed' && ['self-employed', 'mei'].includes(profile.variableRegime);
@@ -243,7 +273,8 @@
 
   function calculateProfileIncome(profile) {
     const fixed = Math.max(0, Number(profile.grossFixedIncome) || 0);
-    const variable = Math.max(0, Number(profile.grossVariableIncome) || 0);
+    const extraSources = profileExtraSourceTotals(profile);
+    const variable = Math.max(0, Number(Array.isArray(profile.extraSources) ? extraSources.cashIncome : profile.grossVariableIncome) || 0);
     const gross = fixed + variable;
     const dependents = Number(profile.dependents) || 0;
     const regime = profile.workRegime || 'clt';
@@ -356,7 +387,7 @@
         date: profile.contractVacationDate || ''
       } : null
     };
-    return { gross: roundMoney(gross), pension: roundMoney(pension), irrf: roundMoney(irrf), otherDeductions: roundMoney(otherDeductions), monthlyNet, employmentGross, independentGross, thirteenth, vacation, reserves, contractBenefits, notes, hasGross, legacyNet, regime, needsActivity };
+    return { gross: roundMoney(gross), pension: roundMoney(pension), irrf: roundMoney(irrf), otherDeductions: roundMoney(otherDeductions), monthlyNet, benefitsMonthly: roundMoney(extraSources.benefits), employmentGross, independentGross, thirteenth, vacation, reserves, contractBenefits, notes, hasGross, legacyNet, regime, needsActivity };
   }
 
   function profileTotals(profile) {
@@ -372,7 +403,7 @@
     const incomeLabel = totals.calculation.hasGross ? 'Renda após descontos' : totals.calculation.legacyNet > 0 ? 'Renda líquida anterior' : 'Renda estimada';
     const incomeValue = totals.calculation.needsActivity ? 'Selecione a atividade' : money(totals.monthlyIncome);
     const marginValue = totals.calculation.needsActivity ? 'Aguardando dados' : money(totals.estimatedMargin);
-    return `<div class="profile-metric"><span>${incomeLabel}</span><strong>${incomeValue}</strong></div><div class="profile-metric"><span>Gastos pessoais</span><strong>${money(totals.monthlyExpenses)}</strong></div><div class="profile-metric ${!totals.calculation.needsActivity && totals.estimatedMargin < 0 ? 'profile-metric-negative' : ''}"><span>${marginLabel}</span><strong>${marginValue}</strong></div>${compact ? '' : `<p class="profile-calculation-note">${escapeHTML(profile.name ? `${profile.name}, esta é uma estimativa baseada nos valores informados.` : 'Estimativa baseada nos valores informados.')}</p>`}`;
+    return `<div class="profile-metric"><span>${incomeLabel}</span><strong>${incomeValue}</strong></div><div class="profile-metric"><span>Benefícios estimados · fora do saldo</span><strong>${money(totals.calculation.benefitsMonthly)}</strong></div><div class="profile-metric"><span>Gastos pessoais</span><strong>${money(totals.monthlyExpenses)}</strong></div><div class="profile-metric ${!totals.calculation.needsActivity && totals.estimatedMargin < 0 ? 'profile-metric-negative' : ''}"><span>${marginLabel}</span><strong>${marginValue}</strong></div>${compact ? '' : `<p class="profile-calculation-note">${escapeHTML(profile.name ? `${profile.name}, esta é uma estimativa baseada nos valores informados.` : 'Estimativa baseada nos valores informados.')}</p>`}`;
   }
 
   function renderProfileOverview() {
@@ -388,13 +419,15 @@
   function profileFromForm(form) {
     const data = new FormData(form);
     const grossFixedIncome = Number(data.get('grossFixedIncome')) || 0;
-    const grossVariableIncome = Number(data.get('grossVariableIncome')) || 0;
+    const extraSources = profileExtraSourceDraft.map(item => ({ ...item }));
+    const grossVariableIncome = profileExtraSourceTotals({ extraSources }).cashIncome;
     return {
       saved: true,
       name: String(data.get('name') || '').trim(),
       workRegime: String(data.get('workRegime') || 'other'),
       grossFixedIncome,
       grossVariableIncome,
+      extraSources,
       profileIncomeEnabled: data.get('profileIncomeEnabled') === 'on',
       paymentDay: Number(data.get('paymentDay')) || null,
       contractBenefitBase: String(data.get('contractBenefitBase') || 'gross'),
@@ -487,7 +520,6 @@
     form.elements.name.value = profile.name || '';
     form.elements.workRegime.value = profile.workRegime || 'clt';
     form.elements.grossFixedIncome.value = profile.grossFixedIncome ?? '';
-    form.elements.grossVariableIncome.value = profile.grossVariableIncome ?? '';
     form.elements.profileIncomeEnabled.checked = profile.profileIncomeEnabled ?? true;
     form.elements.paymentDay.value = profile.paymentDay ?? '';
     form.elements.contractBenefitBase.value = profile.contractBenefitBase || 'gross';
@@ -506,6 +538,7 @@
     form.elements.publicPension.value = profile.publicPension ?? '';
     form.elements.otherDeductions.value = profile.otherDeductions ?? '';
     updateProfileRegimeFields();
+    renderProfileExtraSourceList();
     renderProfileExpenseList();
     renderProfileEstimate(profile.saved ? profile : profileFromForm(form));
   }
@@ -520,6 +553,23 @@
     document.getElementById('profile-estimate').innerHTML = `<div class="profile-metrics">${profileMetricsHTML(profile)}</div>`;
     renderSalaryCalculation(profile);
     renderProfileExpenseSummary(profile.expenseItems || []);
+  }
+
+  function renderProfileExtraSourceList() {
+    const root = document.getElementById('profile-extra-income-list');
+    if (!root) return;
+    root.innerHTML = profileExtraSourceDraft.length ? profileExtraSourceDraft.map(item => {
+      const source = EXTRA_SOURCE_TYPES[item.kind] || EXTRA_SOURCE_TYPES['other-income'];
+      const monthlyAmount = extraSourceMonthlyAmount(item);
+      const unit = item.cadence === 'business-day' ? 'por dia útil' : 'por mês';
+      return `<article class="profile-extra-source-row">
+        <div class="profile-extra-source-title"><strong>${escapeHTML(item.description || source.label)}</strong><span>${source.isBenefit ? 'Benefício · não entra no saldo disponível' : 'Renda em dinheiro · entra na estimativa após descontos'}</span></div>
+        <label class="field">Valor ${unit} (R$)<input data-extra-source-amount="${escapeHTML(item.id)}" type="number" min="0.01" step="0.01" inputmode="decimal" value="${Number(item.amount) || ''}" aria-label="Valor de ${escapeHTML(item.description || source.label)}"></label>
+        <label class="field">Cálculo<select data-extra-source-cadence="${escapeHTML(item.id)}"><option value="monthly"${item.cadence === 'monthly' ? ' selected' : ''}>Mensal</option><option value="business-day"${item.cadence === 'business-day' ? ' selected' : ''}>Por dia útil</option></select></label>
+        <div class="profile-extra-source-monthly"><span>Estimativa mensal</span><strong>${money(monthlyAmount)}</strong></div>
+        <button class="small-action delete" type="button" data-remove-extra-source="${escapeHTML(item.id)}" aria-label="Remover ${escapeHTML(item.description || source.label)}">Remover</button>
+      </article>`;
+    }).join('') : '<div class="profile-list-empty">Nenhuma renda extra ou benefício adicionado.</div>';
   }
 
   function updateProfileRegimeFields() {
@@ -541,7 +591,7 @@
     document.getElementById('dependents-field').hidden = !supportsDependents;
     document.getElementById('income-calculation-details').hidden = !hasEmploymentBenefits && !supportsDependents;
     document.getElementById('profile-regime-options').hidden = !isMixed && !isMei && !isSelfEmployed && regime !== 'public-local' && regime !== 'other';
-    const grossIncome = Number(form.elements.grossFixedIncome.value) + Number(form.elements.grossVariableIncome.value);
+    const grossIncome = Number(form.elements.grossFixedIncome.value) + profileExtraSourceTotals({ extraSources: profileExtraSourceDraft }).cashIncome;
     form.elements.meiActivity.required = isMei && grossIncome > 0;
     const incomeScheduleEnabled = form.elements.profileIncomeEnabled.checked;
     document.getElementById('profile-income-schedule-fields').hidden = !incomeScheduleEnabled;
@@ -580,14 +630,16 @@
     const root = document.getElementById('salary-calculation');
     const result = calculateProfileIncome(profile);
     const contractPreview = contractBenefitsPreview(result);
+    const benefitSources = (profile.extraSources || []).filter(item => EXTRA_SOURCE_TYPES[item.kind]?.isBenefit);
+    const extraBenefitMarkup = benefitSources.length ? `<div class="salary-benefits-preview"><h3>Benefícios mensais estimados · fora do saldo</h3>${benefitSources.map(item => `<div><span>${escapeHTML(item.description || EXTRA_SOURCE_TYPES[item.kind].label)}${item.cadence === 'business-day' ? ` · ${money(item.amount)} por dia útil` : ''}</span><strong>${money(extraSourceMonthlyAmount(item))}</strong></div>`).join('')}<p class="salary-note">Valores por dia útil usam 22 dias como referência. Benefícios não são somados à renda em dinheiro nem ao saldo disponível.</p></div>` : '';
     if (result.needsActivity) {
-      root.innerHTML = `<div class="salary-empty">Selecione a atividade do MEI para calcular o DAS e a renda após esse desconto.</div>${contractPreview}`;
+      root.innerHTML = `<div class="salary-empty">Selecione a atividade do MEI para calcular o DAS e a renda após esse desconto.</div>${contractPreview}${extraBenefitMarkup}`;
       return;
     }
     if (!result.hasGross) {
       root.innerHTML = result.legacyNet > 0
-        ? `<div class="salary-empty">Preencha a renda bruta para ver INSS, IRRF, 13º e férias. A renda líquida anterior continua sendo usada na estimativa de margem enquanto isso.</div>${contractPreview}`
-        : `<div class="salary-empty">Informe sua renda bruta para ver a estimativa dos descontos e benefícios aplicáveis ao regime escolhido.</div>${contractPreview}`;
+        ? `<div class="salary-empty">Preencha a renda bruta para ver INSS, IRRF, 13º e férias. A renda líquida anterior continua sendo usada na estimativa de margem enquanto isso.</div>${contractPreview}${extraBenefitMarkup}`
+        : `<div class="salary-empty">Informe sua renda bruta para ver a estimativa dos descontos e benefícios aplicáveis ao regime escolhido.</div>${contractPreview}${extraBenefitMarkup}`;
       return;
     }
     const meiOnly = result.regime === 'mei';
@@ -609,7 +661,7 @@
         <article class="salary-benefit"><h3>Férias + 1/3 estimadas</h3><div><span>Total bruto</span><strong>${money(result.vacation.gross)}</strong></div><div><span>Adicional de 1/3 incluído</span><strong>${money(result.vacation.bonus)}</strong></div><div><span>INSS / previdência + IRRF</span><strong>${money(result.vacation.pension + result.vacation.irrf)}</strong></div><div><span>Líquido estimado</span><strong>${money(result.vacation.net)}</strong></div></article>
       </div>${reserveMarkup}` : reserveMarkup;
     const notes = result.notes.map(note => `<p class="salary-note">${escapeHTML(note)}</p>`).join('');
-    root.innerHTML = `<div class="salary-calculation-heading"><strong>Confira os descontos antes de salvar</strong><span>Prévia atualizada ao preencher · estimativa pelas regras de ${TAX_YEAR}</span></div><div class="salary-metrics">${metrics.map(([label, value], index) => `<div class="salary-metric ${label.startsWith('Total descontado') ? 'salary-metric-total' : ''} ${index === metrics.length - 1 ? 'salary-metric-net' : ''}"><span>${label}</span><strong>${value}</strong></div>`).join('')}</div>${benefitMarkup}${contractPreview}${notes}`;
+    root.innerHTML = `<div class="salary-calculation-heading"><strong>Confira os descontos antes de salvar</strong><span>Prévia atualizada ao preencher · estimativa pelas regras de ${TAX_YEAR}</span></div><div class="salary-metrics">${metrics.map(([label, value], index) => `<div class="salary-metric ${label.startsWith('Total descontado') ? 'salary-metric-total' : ''} ${index === metrics.length - 1 ? 'salary-metric-net' : ''}"><span>${label}</span><strong>${value}</strong></div>`).join('')}</div>${benefitMarkup}${contractPreview}${extraBenefitMarkup}${notes}`;
   }
 
   function profileCategoryTotalsHTML(items) {
@@ -756,6 +808,65 @@
     updateProfileRegimeFields();
     renderProfileEstimate(profileFromForm(profileForm));
   });
+  const extraSourceCadence = document.getElementById('extra-source-cadence');
+  extraSourceCadence.addEventListener('change', () => {
+    document.getElementById('extra-source-amount-label').firstChild.textContent = extraSourceCadence.value === 'business-day' ? 'Valor por dia útil (R$)' : 'Valor por mês (R$)';
+  });
+  document.getElementById('add-extra-source').addEventListener('click', () => {
+    const kind = document.getElementById('extra-source-kind').value;
+    const amountInput = document.getElementById('extra-source-amount');
+    const amount = Number(amountInput.value);
+    if (!(amount > 0)) {
+      showToast('Informe um valor maior que zero.');
+      amountInput.focus();
+      return;
+    }
+    const sourceType = EXTRA_SOURCE_TYPES[kind] || EXTRA_SOURCE_TYPES['other-income'];
+    profileExtraSourceDraft.push({
+      id: newId(), kind,
+      description: document.getElementById('extra-source-name').value.trim() || sourceType.label,
+      amount, cadence: extraSourceCadence.value
+    });
+    amountInput.value = '';
+    document.getElementById('extra-source-name').value = '';
+    renderProfileExtraSourceList();
+    updateProfileRegimeFields();
+    renderProfileEstimate(profileFromForm(profileForm));
+    amountInput.focus();
+  });
+  const extraSourceList = document.getElementById('profile-extra-income-list');
+  extraSourceList.addEventListener('input', event => {
+    const amountInput = event.target.closest('[data-extra-source-amount]');
+    const source = amountInput && profileExtraSourceDraft.find(item => item.id === amountInput.dataset.extraSourceAmount);
+    if (source) {
+      source.amount = Number(amountInput.value) || 0;
+      amountInput.closest('.profile-extra-source-row').querySelector('.profile-extra-source-monthly strong').textContent = money(extraSourceMonthlyAmount(source));
+    }
+  });
+  extraSourceList.addEventListener('change', event => {
+    const cadenceSelect = event.target.closest('[data-extra-source-cadence]');
+    if (!cadenceSelect) return;
+    const source = profileExtraSourceDraft.find(item => item.id === cadenceSelect.dataset.extraSourceCadence);
+    if (!source) return;
+    source.cadence = cadenceSelect.value;
+    renderProfileExtraSourceList();
+    updateProfileRegimeFields();
+    renderProfileEstimate(profileFromForm(profileForm));
+  });
+  extraSourceList.addEventListener('click', event => {
+    const removeButton = event.target.closest('[data-remove-extra-source]');
+    if (!removeButton) return;
+    profileExtraSourceDraft = profileExtraSourceDraft.filter(item => item.id !== removeButton.dataset.removeExtraSource);
+    renderProfileExtraSourceList();
+    updateProfileRegimeFields();
+    renderProfileEstimate(profileFromForm(profileForm));
+  });
+  [document.getElementById('extra-source-name'), document.getElementById('extra-source-amount')].forEach(input => input.addEventListener('keydown', event => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      document.getElementById('add-extra-source').click();
+    }
+  }));
   document.getElementById('add-profile-expense').addEventListener('click', () => {
     const description = document.getElementById('profile-expense-description');
     const amount = document.getElementById('profile-expense-amount');

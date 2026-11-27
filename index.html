@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#f5f7f4">
   <meta name="description" content="Organize rendas fixas e variáveis, contas, gastos e metas em um só lugar.">
   <title>PFO — organização financeira</title>
-  <link rel="stylesheet" href="styles.css?v=contract-benefits-cycle-2026-11-27">
-  <script src="app.js?v=contract-benefits-cycle-2026-11-27" defer></script>
+  <link rel="stylesheet" href="styles.css?v=extra-income-benefits-2026-11-27">
+  <script src="app.js?v=extra-income-benefits-2026-11-27" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -96,10 +96,21 @@
             </div>
           </section>
           <section class="profile-section" aria-labelledby="profile-income-title">
-            <div class="profile-section-heading"><div><h2 id="profile-income-title">Quanto você recebe por mês?</h2><p class="panel-subtitle">Use valores aproximados antes dos descontos. Se não souber algum valor, pode ajustar depois.</p></div></div>
+            <div class="profile-section-heading"><div><h2 id="profile-income-title">Quanto você recebe por mês?</h2><p class="panel-subtitle">Informe sua renda fixa e adicione cada renda extra ou benefício separadamente.</p></div></div>
             <div class="form-grid">
               <label class="field">Salário ou renda fixa mensal (R$)<input name="grossFixedIncome" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Ex.: 3.000,00"><span class="field-help">O valor antes de INSS, imposto ou outros descontos.</span></label>
-              <label class="field">Renda extra média mensal (R$)<input name="grossVariableIncome" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Se não tiver, deixe em 0"><span class="field-help">Comissões ou renda que muda de um mês para outro.</span></label>
+            </div>
+            <div class="profile-extra-income" id="profile-extra-income">
+              <div class="profile-extra-income-heading"><strong>Renda extra e benefícios</strong><span>Adicione freelas, comissões, vale-refeição ou vale-transporte.</span></div>
+              <div class="profile-extra-income-entry">
+                <label class="field">O que deseja adicionar?<select id="extra-source-kind"><option value="freelance">Freela / trabalho por fora</option><option value="commission">Comissões</option><option value="meal-benefit">Vale-refeição</option><option value="transport-benefit">Vale-transporte</option><option value="other-income">Outra renda em dinheiro</option><option value="other-benefit">Outro benefício</option></select></label>
+                <label class="field">Nome (opcional)<input id="extra-source-name" maxlength="50" placeholder="Ex.: Cliente A"></label>
+                <label class="field" id="extra-source-amount-label">Valor por mês (R$)<input id="extra-source-amount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0,00"></label>
+                <label class="field">Como o valor é calculado?<select id="extra-source-cadence"><option value="monthly">Valor fechado por mês</option><option value="business-day">Valor por dia útil</option></select></label>
+                <button class="button button-secondary" id="add-extra-source" type="button">＋ Adicionar</button>
+              </div>
+              <p class="field-help profile-extra-income-note">Valores por dia útil usam 22 dias úteis como referência mensal. Feriados não são descontados. Freelas e comissões entram na estimativa de renda após descontos; vales e outros benefícios ficam separados do dinheiro disponível.</p>
+              <div id="profile-extra-income-list" class="profile-extra-income-list" aria-live="polite"></div>
             </div>
             <div class="profile-income-schedule" id="profile-income-schedule">
               <label class="checkbox-field"><input name="profileIncomeEnabled" type="checkbox" checked>Adicionar minha renda após descontos ao painel como previsão mensal</label>
