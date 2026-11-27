@@ -91,25 +91,30 @@
             <div class="profile-section-heading"><div><h2 id="profile-about-title">Sobre você</h2><p class="panel-subtitle">Informações básicas para personalizar sua organização.</p></div></div>
             <div class="form-grid">
               <label class="field full">Como gostaria de ser chamado(a)?<input name="name" maxlength="50" autocomplete="given-name" placeholder="Seu nome (opcional)"></label>
-              <label class="field full">Regime de trabalho<select name="workRegime"><option value="clt">Empregado(a) CLT</option><option value="public-federal">Servidor(a) público(a) federal — RPPS da União</option><option value="public-local">Servidor(a) estadual ou municipal</option><option value="self-employed">Autônomo(a) / freelancer</option><option value="mei">Microempreendedor(a) individual — MEI</option><option value="mixed">Renda combinada (salário + outra atividade)</option><option value="other">Outro / em transição</option></select></label>
+              <label class="field full">Como você trabalha?<select name="workRegime"><option value="clt">Tenho emprego com carteira assinada (CLT)</option><option value="public-federal">Sou servidor(a) público(a) federal</option><option value="public-local">Sou servidor(a) estadual ou municipal</option><option value="self-employed">Trabalho por conta própria / freelancer</option><option value="mei">Tenho um MEI</option><option value="mixed">Tenho salário e outra fonte de renda</option><option value="other">Outra situação ou não tenho certeza</option></select></label>
             </div>
           </section>
           <section class="profile-section" aria-labelledby="profile-income-title">
-            <div class="profile-section-heading"><div><h2 id="profile-income-title">Renda bruta mensal</h2><p class="panel-subtitle">Informe os valores antes de INSS, imposto de renda ou DAS. Para renda variável, use uma média mensal.</p></div></div>
+            <div class="profile-section-heading"><div><h2 id="profile-income-title">Quanto você recebe por mês?</h2><p class="panel-subtitle">Use valores aproximados antes dos descontos. Se não souber algum valor, pode ajustar depois.</p></div></div>
             <div class="form-grid">
-              <label class="field">Renda fixa bruta (R$)<input name="grossFixedIncome" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00"></label>
-              <label class="field">Média variável bruta (R$)<input name="grossVariableIncome" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00"></label>
-              <label class="field">Meses trabalhados no ano (15+ dias contam)<input name="monthsWorked" type="number" min="1" max="12" step="1" value="12"></label>
-              <label class="field">Dependentes para IRRF<input name="dependents" type="number" min="0" max="20" step="1" value="0"></label>
+              <label class="field">Salário ou renda fixa mensal (R$)<input name="grossFixedIncome" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Ex.: 3.000,00"><span class="field-help">O valor antes de INSS, imposto ou outros descontos.</span></label>
+              <label class="field">Renda extra média mensal (R$)<input name="grossVariableIncome" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Se não tiver, deixe em 0"><span class="field-help">Comissões ou renda que muda de um mês para outro.</span></label>
             </div>
+            <details class="profile-calculation-details" id="income-calculation-details">
+              <summary>Quero ajustar outros detalhes (opcional)</summary>
+              <div class="form-grid">
+                <label class="field" id="months-worked-field">Meses trabalhados neste ano<input name="monthsWorked" type="number" min="1" max="12" step="1" value="12"><span class="field-help">Usado para estimar o 13º e as férias proporcionais.</span></label>
+                <label class="field" id="dependents-field">Número de dependentes no Imposto de Renda<input name="dependents" type="number" min="0" max="20" step="1" value="0"><span class="field-help">Se não tiver dependentes, mantenha 0.</span></label>
+              </div>
+            </details>
             <p class="form-note profile-legacy-note" id="profile-legacy-income-note" hidden></p>
-            <p class="form-note profile-legacy-note" id="mixed-income-note" hidden>Para esta simulação, a renda fixa é tratada como salário CLT. Escolha abaixo como classificar a renda variável.</p>
-            <div class="form-grid profile-regime-options">
-              <label class="field full" id="mixed-variable-field" hidden>Regime da renda variável<select name="variableRegime"><option value="clt">Faz parte do salário CLT</option><option value="self-employed">Autônomo(a) / freelancer</option><option value="mei">Receita de MEI</option></select></label>
-              <label class="field full" id="mei-activity-field" hidden>Atividade principal do MEI<select name="meiActivity"><option value="">Selecione sua atividade</option><option value="service">Prestação de serviços (ISS)</option><option value="commerce">Comércio ou indústria (ICMS)</option><option value="both">Serviços e comércio/indústria (ISS + ICMS)</option><option value="haul">MEI caminhoneiro (transporte de cargas)</option></select></label>
-              <label class="field full" id="independent-contribution-field" hidden>Contribuição ao INSS como autônomo<select name="contributionMode"><option value="20">Plano normal: 20% da renda, dentro dos limites</option><option value="11">Plano simplificado: 11% do salário mínimo</option><option value="none">Não calcular contribuição ao INSS</option></select></label>
-              <label class="field full" id="public-pension-field" hidden>Desconto previdenciário mensal do contracheque (R$)<input name="publicPension" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Informe o valor do seu RPPS"></label>
-              <label class="field full" id="other-deductions-field" hidden>Outros descontos mensais estimados (R$)<input name="otherDeductions" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00"></label>
+            <p class="form-note profile-legacy-note" id="mixed-income-note" hidden>Na renda combinada, a parte fixa é calculada como salário CLT. Escolha de onde vem a renda extra.</p>
+            <div class="form-grid profile-regime-options" id="profile-regime-options">
+              <label class="field full" id="mixed-variable-field" hidden>De onde vem sua renda extra?<select name="variableRegime"><option value="clt">Também é salário CLT</option><option value="self-employed">Trabalho autônomo ou freelancer</option><option value="mei">Receita do meu MEI</option></select></label>
+              <label class="field full" id="mei-activity-field" hidden>Qual atividade do MEI?<select name="meiActivity"><option value="">Selecione uma opção</option><option value="service">Presto serviços</option><option value="commerce">Trabalho com comércio ou indústria</option><option value="both">Faço serviços e comércio</option><option value="haul">Sou MEI caminhoneiro</option></select><span class="field-help">Essa escolha ajuda a estimar o valor do DAS mensal.</span></label>
+              <label class="field full" id="independent-contribution-field" hidden>Como você contribui para o INSS?<select name="contributionMode"><option value="20">Plano normal — 20% da renda, respeitando os limites</option><option value="11">Plano simplificado — 11% do salário mínimo</option><option value="none">Não incluir contribuição nesta estimativa</option></select><span class="field-help">Se não souber qual plano usa, confira no Meu INSS ou deixe sem calcular por enquanto.</span></label>
+              <label class="field full" id="public-pension-field" hidden>Previdência descontada no contracheque (R$)<input name="publicPension" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Digite o valor mensal"><span class="field-help">Encontre esse valor no seu contracheque. Se não souber, deixe em branco.</span></label>
+              <label class="field full" id="other-deductions-field" hidden>Outros descontos mensais que você conhece (R$)<input name="otherDeductions" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Se não tiver, deixe em 0"></label>
             </div>
             <div id="salary-calculation" class="salary-calculation" aria-live="polite"></div>
           </section>
