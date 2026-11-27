@@ -28,6 +28,7 @@
         <button class="nav-link" data-view="transactions"><span aria-hidden="true">↕</span>Movimentações</button>
         <button class="nav-link" data-view="planning"><span aria-hidden="true">▦</span>Planejamento</button>
         <button class="nav-link" data-view="goals"><span aria-hidden="true">◎</span>Metas</button>
+        <button class="nav-link" data-view="profile"><span aria-hidden="true">◉</span>Perfil</button>
       </nav>
 
       <section class="view active" id="view-overview" aria-labelledby="page-title">
@@ -60,6 +61,10 @@
           <div class="panel-heading"><div><h2>Fontes de renda</h2><p class="panel-subtitle">Acompanhe entradas fixas e variáveis juntas</p></div><button class="quiet-link" id="add-income">＋ Adicionar renda</button></div>
           <div id="income-sources" class="income-list"></div>
         </section>
+        <section class="panel profile-projection" aria-labelledby="profile-projection-title">
+          <div class="panel-heading"><div><h2 id="profile-projection-title">Referência mensal do seu perfil</h2><p class="panel-subtitle">Estimativa com os valores informados no perfil; não altera seu saldo disponível.</p></div><button class="quiet-link" data-go="profile">Editar perfil <span aria-hidden="true">→</span></button></div>
+          <div id="profile-overview" class="profile-overview"></div>
+        </section>
       </section>
 
       <section class="view" id="view-transactions" aria-labelledby="transactions-title" hidden>
@@ -77,6 +82,45 @@
         <div class="page-heading"><div><p class="eyebrow">UM PASSO DE CADA VEZ</p><h1 id="goals-title">Metas</h1><p class="subtitle">Acompanhe o que você está guardando e quanto falta para chegar lá.</p></div><button class="button button-primary" id="new-goal">＋ Criar meta</button></div>
         <div id="goals-list" class="goals-grid"></div>
       </section>
+
+      <section class="view" id="view-profile" aria-labelledby="profile-title" hidden>
+        <div class="page-heading"><div><p class="eyebrow">SEU CENÁRIO FINANCEIRO</p><h1 id="profile-title">Perfil</h1><p class="subtitle">Informe sua realidade mensal para ter uma estimativa mais próxima do seu dia a dia.</p></div></div>
+        <div class="profile-intro"><strong>Seu perfil ajuda o PFO a estimar sua margem mensal.</strong><span>Preencha apenas o que quiser. Não pedimos CPF, dados bancários ou informações que não sejam necessárias para este cálculo.</span></div>
+        <form id="profile-form" class="profile-form">
+          <section class="profile-section" aria-labelledby="profile-about-title">
+            <div class="profile-section-heading"><div><h2 id="profile-about-title">Sobre você</h2><p class="panel-subtitle">Informações básicas para personalizar sua organização.</p></div></div>
+            <div class="form-grid">
+              <label class="field full">Como gostaria de ser chamado(a)?<input name="name" maxlength="50" autocomplete="given-name" placeholder="Seu nome (opcional)"></label>
+              <label class="field full">Regime de trabalho<select name="workRegime"><option value="employee">Emprego assalariado (CLT/servidor)</option><option value="self-employed">Autônomo(a) / freelancer</option><option value="business-owner">Empreendedor(a) / MEI</option><option value="mixed">Renda de mais de um regime</option><option value="other">Outro / em transição</option></select></label>
+            </div>
+          </section>
+          <section class="profile-section" aria-labelledby="profile-income-title">
+            <div class="profile-section-heading"><div><h2 id="profile-income-title">Renda mensal de referência</h2><p class="panel-subtitle">Use valores líquidos. Para renda variável, informe uma média mensal aproximada.</p></div></div>
+            <div class="form-grid">
+              <label class="field">Renda fixa mensal (R$)<input name="fixedIncome" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00"></label>
+              <label class="field">Média da renda variável (R$)<input name="variableIncome" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00"></label>
+            </div>
+          </section>
+          <section class="profile-section" aria-labelledby="profile-expenses-title">
+            <div class="profile-section-heading"><div><h2 id="profile-expenses-title">Gastos pessoais mensais</h2><p class="panel-subtitle">Estimativas por categoria, mesmo que ainda não tenha registrado os lançamentos.</p></div></div>
+            <div class="form-grid profile-expenses">
+              <label class="field">Moradia (R$)<input name="housing" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00"></label>
+              <label class="field">Alimentação (R$)<input name="food" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00"></label>
+              <label class="field">Contas e serviços (R$)<input name="bills" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00"></label>
+              <label class="field">Transporte (R$)<input name="transport" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00"></label>
+              <label class="field">Saúde e educação (R$)<input name="healthEducation" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00"></label>
+              <label class="field">Pessoais e lazer (R$)<input name="personal" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00"></label>
+              <label class="field">Outros (R$)<input name="other" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,00"></label>
+            </div>
+            <p class="form-note profile-note">Esses valores servem para a estimativa do perfil. Registre cada despesa em Movimentações ou Contas para que ela entre no acompanhamento do saldo real; assim, não há contagem duplicada.</p>
+          </section>
+          <section class="profile-section profile-estimate-section" aria-labelledby="profile-estimate-title">
+            <div class="profile-section-heading"><div><h2 id="profile-estimate-title">Sua estimativa mensal</h2><p class="panel-subtitle">Renda de referência menos gastos pessoais de referência.</p></div></div>
+            <div id="profile-estimate" class="profile-estimate" aria-live="polite"></div>
+          </section>
+          <div class="profile-save-row"><span>Os dados ficam salvos neste navegador.</span><button class="button button-primary" type="submit">Salvar perfil</button></div>
+        </form>
+      </section>
     </main>
   </div>
 
@@ -85,6 +129,7 @@
     <button class="nav-link" data-view="transactions"><span aria-hidden="true">↕</span>Movimentos</button>
     <button class="nav-link" data-view="planning"><span aria-hidden="true">▦</span>Contas</button>
     <button class="nav-link" data-view="goals"><span aria-hidden="true">◎</span>Metas</button>
+    <button class="nav-link" data-view="profile"><span aria-hidden="true">◉</span>Perfil</button>
   </nav>
 
   <dialog class="modal" id="transaction-dialog" aria-labelledby="transaction-dialog-title">
