@@ -148,11 +148,14 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .profile-expense-entry .button { white-space: nowrap; }
 .profile-classifier-note { margin: 9px 0 13px; color: var(--muted); font-size: 12px; }
 .profile-expense-list { max-width: 810px; }
-.profile-expense-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(155px, .55fr) auto; align-items: center; gap: 12px; padding: 11px 0; border-top: 1px solid var(--line); }
+.profile-expense-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, auto) minmax(155px, .55fr) auto; align-items: center; gap: 12px; padding: 11px 0; border-top: 1px solid var(--line); }
 .profile-expense-description { display: flex; flex-direction: column; min-width: 0; }
 .profile-expense-description strong { overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .profile-expense-description span { color: var(--muted); font-size: 11px; }
 .profile-expense-amount { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.profile-expense-value { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 3px 7px; }
+.profile-expense-value-input { width: 115px; min-height: 38px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit; font-size: 14px; }
+.profile-expense-value-input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .profile-expense-category select { width: 100%; min-height: 40px; padding: 0 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font-size: 13px; }
 .profile-category-summary-wrap { max-width: 810px; margin-top: 17px; }
 .profile-category-summary-wrap h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
@@ -229,7 +232,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   .profile-expense-entry .button { grid-column: 1 / -1; width: 100%; }
   .profile-expense-row { grid-template-columns: minmax(0, 1fr) auto; gap: 7px 9px; }
   .profile-expense-description { grid-column: 1; }
-  .profile-expense-amount { grid-column: 2; grid-row: 1; }
+  .profile-expense-value { grid-column: 2; grid-row: 1; }
   .profile-expense-category { grid-column: 1; }
   .profile-expense-row > .small-action { grid-column: 2; grid-row: 2; justify-self: end; }
   .profile-category-summary, .profile-category-totals { grid-template-columns: 1fr; }
