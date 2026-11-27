@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f7f4">
+  <meta name="description" content="Organize rendas fixas e variáveis, contas, gastos e metas em um só lugar.">
+  <title>Em Ordem — finanças pessoais</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Navegação principal">
+      <a class="brand" href="#inicio" aria-label="Em Ordem, início"><span class="brand-mark">e</span><span>em ordem</span></a>
+      <div class="side-label">SEU ESPAÇO</div>
+      <nav class="side-nav" aria-label="Seções">
+        <button class="nav-link active" data-view="overview"><span aria-hidden="true">⌂</span>Visão geral</button>
+        <button class="nav-link" data-view="transactions"><span aria-hidden="true">↕</span>Movimentações</button>
+        <button class="nav-link" data-view="planning"><span aria-hidden="true">▦</span>Planejamento</button>
+        <button class="nav-link" data-view="goals"><span aria-hidden="true">◎</span>Metas</button>
+      </nav>
+      <div class="side-foot"><span class="privacy-dot"></span> Seus dados ficam neste dispositivo</div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <div class="mobile-brand"><span class="brand-mark">e</span><span>em ordem</span></div>
+        <div class="month-control" aria-label="Selecionar mês">
+          <button class="icon-button" id="prev-month" aria-label="Mês anterior">‹</button>
+          <span id="month-label"></span>
+          <button class="icon-button" id="next-month" aria-label="Próximo mês">›</button>
+        </div>
+        <button class="button button-primary top-add" id="new-transaction"><span aria-hidden="true">＋</span> Novo lançamento</button>
+      </header>
+
+      <section class="view active" id="view-overview" aria-labelledby="page-title">
+        <div class="page-heading"><div><p class="eyebrow">SEU DINHEIRO, EM UM SÓ LUGAR</p><h1 id="page-title">Visão geral</h1><p class="subtitle">Veja o que entrou, o que está comprometido e quanto pode usar.</p></div></div>
+        <div class="overview-grid">
+          <section class="balance-card" aria-labelledby="available-title">
+            <div class="balance-top"><div><p class="balance-label" id="available-title">Disponível para usar</p><p class="balance-amount" id="available-value">R$ 0,00</p></div><span class="balance-icon" aria-hidden="true">↗</span></div>
+            <p class="balance-explain" id="balance-explain">Saldo atual menos contas previstas e valores guardados para metas.</p>
+            <button class="text-button balance-edit" id="edit-opening-balance">Ajustar saldo inicial <span aria-hidden="true">→</span></button>
+          </section>
+          <section class="summary-card" aria-label="Resumo do mês">
+            <div class="summary-head"><h2>Resumo do mês</h2><span class="summary-period" id="summary-period"></span></div>
+            <div class="summary-row"><span><i class="legend-dot income-dot"></i>Receitas recebidas</span><strong id="income-total">R$ 0,00</strong></div>
+            <div class="summary-row"><span><i class="legend-dot expense-dot"></i>Despesas pagas</span><strong id="expense-total">R$ 0,00</strong></div>
+            <div class="summary-row"><span><i class="legend-dot planned-dot"></i>Contas previstas</span><strong id="bills-total">R$ 0,00</strong></div>
+          </section>
+        </div>
+
+        <div class="content-grid">
+          <section class="panel category-panel">
+            <div class="panel-heading"><div><h2>Gastos por categoria</h2><p class="panel-subtitle">Despesas pagas neste mês</p></div><button class="quiet-link" data-go="transactions">Ver movimentações <span aria-hidden="true">→</span></button></div>
+            <div id="category-breakdown" class="category-list"></div>
+          </section>
+          <section class="panel upcoming-panel">
+            <div class="panel-heading"><div><h2>Próximos compromissos</h2><p class="panel-subtitle">Contas ainda não pagas</p></div><button class="quiet-link" data-go="planning">Ver tudo <span aria-hidden="true">→</span></button></div>
+            <div id="upcoming-list" class="compact-list"></div>
+          </section>
+        </div>
+        <section class="panel income-panel">
+          <div class="panel-heading"><div><h2>Fontes de renda</h2><p class="panel-subtitle">Acompanhe entradas fixas e variáveis juntas</p></div><button class="quiet-link" id="add-income">＋ Adicionar renda</button></div>
+          <div id="income-sources" class="income-list"></div>
+        </section>
+      </section>
+
+      <section class="view" id="view-transactions" aria-labelledby="transactions-title" hidden>
+        <div class="page-heading"><div><p class="eyebrow">ENTRADAS E SAÍDAS</p><h1 id="transactions-title">Movimentações</h1><p class="subtitle">Registre seus recebimentos e gastos para manter os números em dia.</p></div><button class="button button-primary" data-open-transaction>＋ Novo lançamento</button></div>
+        <section class="panel table-panel"><div class="panel-heading"><div><h2>Lançamentos do mês</h2><p class="panel-subtitle" id="transaction-count">0 itens</p></div><label class="filter-label">Mostrar <select id="transaction-filter" aria-label="Filtrar movimentações"><option value="all">Tudo</option><option value="income">Receitas</option><option value="expense">Despesas pagas</option><option value="bill">Contas previstas</option></select></label></div><div id="transaction-list" class="transaction-list"></div></section>
+      </section>
+
+      <section class="view" id="view-planning" aria-labelledby="planning-title" hidden>
+        <div class="page-heading"><div><p class="eyebrow">ANTECIPE SEUS COMPROMISSOS</p><h1 id="planning-title">Planejamento</h1><p class="subtitle">Considere primeiro as contas certas. Renda variável prevista não entra no disponível antes de chegar.</p></div><button class="button button-primary" id="new-bill">＋ Planejar conta</button></div>
+        <div class="planning-strip"><span class="planning-mark" aria-hidden="true">↗</span><div><strong id="planning-total">R$ 0,00</strong><span>em contas previstas neste mês</span></div><span class="planning-count" id="planning-count">0 contas</span></div>
+        <section class="panel table-panel"><div class="panel-heading"><div><h2>Contas e despesas futuras</h2><p class="panel-subtitle">Marque como paga quando concluir o pagamento.</p></div></div><div id="planning-list" class="transaction-list"></div></section>
+      </section>
+
+      <section class="view" id="view-goals" aria-labelledby="goals-title" hidden>
+        <div class="page-heading"><div><p class="eyebrow">UM PASSO DE CADA VEZ</p><h1 id="goals-title">Metas</h1><p class="subtitle">Acompanhe o que você está guardando e quanto falta para chegar lá.</p></div><button class="button button-primary" id="new-goal">＋ Criar meta</button></div>
+        <div id="goals-list" class="goals-grid"></div>
+      </section>
+    </main>
+  </div>
+
+  <nav class="mobile-nav" aria-label="Navegação móvel">
+    <button class="nav-link active" data-view="overview"><span aria-hidden="true">⌂</span>Início</button>
+    <button class="nav-link" data-view="transactions"><span aria-hidden="true">↕</span>Movimentos</button>
+    <button class="nav-link" data-view="planning"><span aria-hidden="true">▦</span>Contas</button>
+    <button class="nav-link" data-view="goals"><span aria-hidden="true">◎</span>Metas</button>
+  </nav>
+
+  <dialog class="modal" id="transaction-dialog" aria-labelledby="transaction-dialog-title">
+    <form id="transaction-form" method="dialog">
+      <div class="modal-heading"><div><p class="eyebrow">NOVO REGISTRO</p><h2 id="transaction-dialog-title">Adicionar movimentação</h2></div><button class="icon-button close-dialog" type="button" aria-label="Fechar">×</button></div>
+      <div class="form-grid">
+        <label class="field full">Tipo de lançamento<select id="entry-kind" name="kind"><option value="income">Receita</option><option value="expense">Despesa paga</option><option value="bill">Conta prevista</option></select></label>
+        <label class="field full">Descrição<input name="description" required maxlength="70" placeholder="Ex.: Salário, mercado, aluguel"></label>
+        <label class="field">Valor<input name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required placeholder="0,00"></label>
+        <label class="field">Data<input name="date" type="date" required></label>
+        <label class="field full" id="category-field">Categoria<select name="category"><option>Moradia</option><option>Alimentação</option><option>Transporte</option><option>Saúde</option><option>Educação</option><option>Lazer</option><option>Contas</option><option>Compras</option><option>Outros</option></select></label>
+        <label class="field full" id="income-type-field">Tipo de renda<select name="incomeType"><option value="fixed">Fixa / recorrente</option><option value="variable">Variável / eventual</option></select></label>
+        <label class="checkbox-field full" id="repeat-monthly-field"><input name="repeatMonthly" type="checkbox" checked><span>Repetir mensalmente pelos próximos 12 meses</span></label>
+        <label class="field full" id="status-field">Situação<select name="status"><option value="received">Recebida</option><option value="planned">Prevista</option></select></label>
+      </div>
+      <div class="form-actions"><button class="button button-secondary cancel-dialog" type="button">Cancelar</button><button class="button button-primary" type="submit">Salvar lançamento</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="modal modal-small" id="balance-dialog" aria-labelledby="balance-dialog-title">
+    <form id="balance-form" method="dialog"><div class="modal-heading"><div><p class="eyebrow">PONTO DE PARTIDA</p><h2 id="balance-dialog-title">Saldo no início do mês</h2></div><button class="icon-button close-dialog" type="button" aria-label="Fechar">×</button></div><p class="form-note">Informe o total que já havia nas suas contas no começo do mês selecionado. Receitas e despesas registradas serão somadas a partir desse valor.</p><label class="field">Saldo inicial (R$)<input name="openingBalance" type="number" step="0.01" inputmode="decimal" required></label><div class="form-actions"><button class="button button-secondary cancel-dialog" type="button">Cancelar</button><button class="button button-primary" type="submit">Salvar saldo</button></div></form>
+  </dialog>
+
+  <dialog class="modal modal-small" id="goal-dialog" aria-labelledby="goal-dialog-title">
+    <form id="goal-form" method="dialog"><div class="modal-heading"><div><p class="eyebrow">OBJETIVO FINANCEIRO</p><h2 id="goal-dialog-title">Criar meta</h2></div><button class="icon-button close-dialog" type="button" aria-label="Fechar">×</button></div><div class="form-grid"><label class="field full">Nome da meta<input name="name" required maxlength="55" placeholder="Ex.: Reserva de emergência"></label><label class="field">Valor desejado<input name="target" type="number" min="0.01" step="0.01" required placeholder="0,00"></label><label class="field">Já guardado<input name="saved" type="number" min="0" step="0.01" value="0"></label></div><div class="form-actions"><button class="button button-secondary cancel-dialog" type="button">Cancelar</button><button class="button button-primary" type="submit">Salvar meta</button></div></form>
+  </dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
+
