@@ -111,11 +111,11 @@
 
   const profileCategories = ['Moradia', 'Alimentação', 'Contas e serviços', 'Transporte', 'Saúde', 'Educação', 'Pessoais e lazer', 'Outros'];
   const workRegimes = {
-    clt: 'Empregado(a) CLT',
-    'public-federal': 'Servidor(a) público(a) federal — RPPS da União',
+    clt: 'Emprego com carteira assinada (CLT)',
+    'public-federal': 'Servidor(a) público(a) federal',
     'public-local': 'Servidor(a) estadual ou municipal',
-    'self-employed': 'Autônomo(a) / freelancer',
-    mei: 'Microempreendedor(a) individual — MEI',
+    'self-employed': 'Trabalho por conta própria / freelancer',
+    mei: 'MEI',
     mixed: 'Renda de mais de um regime',
     other: 'Outro / em transição'
   };
@@ -413,14 +413,23 @@
     const form = document.getElementById('profile-form');
     const regime = form.elements.workRegime.value;
     const variableRegime = form.elements.variableRegime.value;
-    document.getElementById('mixed-income-note').hidden = regime !== 'mixed';
-    document.getElementById('mixed-variable-field').hidden = regime !== 'mixed';
-    document.getElementById('mei-activity-field').hidden = regime !== 'mei' && !(regime === 'mixed' && variableRegime === 'mei');
-    document.getElementById('independent-contribution-field').hidden = regime !== 'self-employed' && !(regime === 'mixed' && variableRegime === 'self-employed');
+    const isMixed = regime === 'mixed';
+    const isMei = regime === 'mei' || (isMixed && variableRegime === 'mei');
+    const isSelfEmployed = regime === 'self-employed' || (isMixed && variableRegime === 'self-employed');
+    const hasEmploymentBenefits = ['clt', 'public-federal', 'public-local', 'mixed'].includes(regime);
+    const supportsDependents = ['clt', 'public-federal', 'public-local', 'self-employed', 'mixed'].includes(regime);
+    document.getElementById('mixed-income-note').hidden = !isMixed;
+    document.getElementById('mixed-variable-field').hidden = !isMixed;
+    document.getElementById('mei-activity-field').hidden = !isMei;
+    document.getElementById('independent-contribution-field').hidden = !isSelfEmployed;
     document.getElementById('public-pension-field').hidden = regime !== 'public-local';
     document.getElementById('other-deductions-field').hidden = regime !== 'other';
-    const meiIncome = Number(form.elements.grossFixedIncome.value) + Number(form.elements.grossVariableIncome.value);
-    form.elements.meiActivity.required = !document.getElementById('mei-activity-field').hidden && meiIncome > 0;
+    document.getElementById('months-worked-field').hidden = !hasEmploymentBenefits;
+    document.getElementById('dependents-field').hidden = !supportsDependents;
+    document.getElementById('income-calculation-details').hidden = !hasEmploymentBenefits && !supportsDependents;
+    document.getElementById('profile-regime-options').hidden = !isMixed && !isMei && !isSelfEmployed && regime !== 'public-local' && regime !== 'other';
+    const grossIncome = Number(form.elements.grossFixedIncome.value) + Number(form.elements.grossVariableIncome.value);
+    form.elements.meiActivity.required = isMei && grossIncome > 0;
   }
 
   function renderSalaryCalculation(profile) {
@@ -440,7 +449,7 @@
     const contributionLabel = result.regime === 'public-federal' || result.regime === 'public-local' ? 'Previdência / RPPS' : 'INSS / contribuição previdenciária';
     const totalDeductions = roundMoney(result.pension + result.irrf + result.otherDeductions);
     const metrics = [
-      ['Renda bruta mensal', money(result.gross)],
+      ['Total recebido antes dos descontos', money(result.gross)],
       [meiOnly ? 'DAS — parcela previdenciária' : contributionLabel, money(result.pension)],
       ['IRRF estimado', money(result.irrf)],
       ...(meiOnly || (result.regime === 'mixed' && profile.variableRegime === 'mei') ? [['DAS — ICMS/ISS', money(result.otherDeductions)]] : result.otherDeductions ? [['Outros descontos informados', money(result.otherDeductions)]] : []),
