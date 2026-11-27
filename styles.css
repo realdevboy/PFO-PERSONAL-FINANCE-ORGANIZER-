@@ -144,6 +144,24 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .profile-section-heading { margin-bottom: 15px; }
 .profile-section-heading h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.02em; }
 .profile-section .form-grid { max-width: 690px; }
+.profile-expense-entry { display: grid; grid-template-columns: minmax(0, 1fr) minmax(145px, .55fr) auto; align-items: end; gap: 12px; max-width: 810px; }
+.profile-expense-entry .button { white-space: nowrap; }
+.profile-classifier-note { margin: 9px 0 13px; color: var(--muted); font-size: 12px; }
+.profile-expense-list { max-width: 810px; }
+.profile-expense-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(155px, .55fr) auto; align-items: center; gap: 12px; padding: 11px 0; border-top: 1px solid var(--line); }
+.profile-expense-description { display: flex; flex-direction: column; min-width: 0; }
+.profile-expense-description strong { overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.profile-expense-description span { color: var(--muted); font-size: 11px; }
+.profile-expense-amount { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.profile-expense-category select { width: 100%; min-height: 40px; padding: 0 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font-size: 13px; }
+.profile-category-summary-wrap { max-width: 810px; margin-top: 17px; }
+.profile-category-summary-wrap h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+.profile-category-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; border-top: 1px solid var(--line); }
+.profile-category-total { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.profile-category-total strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.profile-category-totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; margin-top: 8px; }
+.profile-list-empty { display: block; padding: 13px 0; color: var(--muted); font-size: 13px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .profile-note { margin: 15px 0 0; }
 .profile-estimate { max-width: 690px; }
 .profile-calculation-note { grid-column: 1 / -1; margin: 8px 0 0; color: var(--muted); font-size: 12px; }
@@ -207,6 +225,14 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   .income-list, .goals-grid { grid-template-columns: 1fr; }
   .profile-metrics { grid-template-columns: 1fr; }
   .profile-metric { flex-direction: row; align-items: baseline; justify-content: space-between; gap: 10px; padding-right: 0; }
+  .profile-expense-entry { grid-template-columns: 1fr 1fr; }
+  .profile-expense-entry .button { grid-column: 1 / -1; width: 100%; }
+  .profile-expense-row { grid-template-columns: minmax(0, 1fr) auto; gap: 7px 9px; }
+  .profile-expense-description { grid-column: 1; }
+  .profile-expense-amount { grid-column: 2; grid-row: 1; }
+  .profile-expense-category { grid-column: 1; }
+  .profile-expense-row > .small-action { grid-column: 2; grid-row: 2; justify-self: end; }
+  .profile-category-summary, .profile-category-totals { grid-template-columns: 1fr; }
   .profile-empty { align-items: flex-start; flex-direction: column; gap: 5px; }
   .profile-save-row { align-items: stretch; flex-direction: column; }
   .profile-save-row .button { width: 100%; }
