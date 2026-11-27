@@ -18,6 +18,14 @@
   }
 
   const state = loadState();
+  state.profile = { ...(state.profile || {}) };
+  if (state.profile.grossFixedIncome == null && state.profile.grossVariableIncome == null && (Number(state.profile.fixedIncome) > 0 || Number(state.profile.variableIncome) > 0)) {
+    state.profile.legacyNetIncome = { fixed: Number(state.profile.fixedIncome) || 0, variable: Number(state.profile.variableIncome) || 0 };
+  }
+  delete state.profile.fixedIncome;
+  delete state.profile.variableIncome;
+  if (state.profile.workRegime === 'employee') state.profile.workRegime = 'clt';
+  if (state.profile.workRegime === 'business-owner') state.profile.workRegime = 'mei';
   let activeGoalId = null;
   const money = value => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value) || 0);
   const monthKey = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -103,12 +111,33 @@
 
   const profileCategories = ['Moradia', 'Alimentação', 'Contas e serviços', 'Transporte', 'Saúde', 'Educação', 'Pessoais e lazer', 'Outros'];
   const workRegimes = {
-    employee: 'Emprego assalariado',
+    clt: 'Empregado(a) CLT',
+    'public-federal': 'Servidor(a) público(a) federal — RPPS da União',
+    'public-local': 'Servidor(a) estadual ou municipal',
     'self-employed': 'Autônomo(a) / freelancer',
-    'business-owner': 'Empreendedor(a) / MEI',
+    mei: 'Microempreendedor(a) individual — MEI',
     mixed: 'Renda de mais de um regime',
     other: 'Outro / em transição'
   };
+
+  const TAX_YEAR = 2026;
+  const MINIMUM_WAGE = 1621;
+  const INSS_CEILING = 8475.55;
+  const employeeInssBands = [
+    { limit: 1621, rate: 0.075 }, { limit: 2902.84, rate: 0.09 },
+    { limit: 4354.27, rate: 0.12 }, { limit: INSS_CEILING, rate: 0.14 }
+  ];
+  const federalRppsBands = [
+    { limit: 1621, rate: 0.075 }, { limit: 2902.84, rate: 0.09 },
+    { limit: 4354.27, rate: 0.12 }, { limit: 8475.55, rate: 0.14 },
+    { limit: 14514.30, rate: 0.145 }, { limit: 29028.57, rate: 0.165 },
+    { limit: 56605.73, rate: 0.19 }, { limit: Infinity, rate: 0.22 }
+  ];
+  const irrfBands = [
+    { limit: 2428.80, rate: 0, deduction: 0 }, { limit: 2826.65, rate: 0.075, deduction: 182.16 },
+    { limit: 3751.05, rate: 0.15, deduction: 394.16 }, { limit: 4664.68, rate: 0.225, deduction: 675.49 },
+    { limit: Infinity, rate: 0.275, deduction: 908.73 }
+  ];
 
   const legacyExpenseCategories = {
     housing: ['Moradia', 'Valor informado anteriormente — moradia'],
@@ -144,18 +173,177 @@
     return rules.find(([, pattern]) => pattern.test(text))?.[0] || 'Outros';
   }
 
+  function roundMoney(value) {
+    return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
+  }
+
+  function progressiveContribution(amount, bands, ceiling = Infinity) {
+    let remaining = Math.min(Math.max(0, Number(amount) || 0), ceiling);
+    let lowerLimit = 0;
+    let total = 0;
+    for (const band of bands) {
+      const taxable = Math.max(0, Math.min(remaining, band.limit) - lowerLimit);
+      total += taxable * band.rate;
+      lowerLimit = band.limit;
+      if (remaining <= band.limit) break;
+    }
+    return roundMoney(total);
+  }
+
+  function calculateIrrf(grossIncome, pensionContribution, dependents) {
+    const gross = Math.max(0, Number(grossIncome) || 0);
+    const legalDeductions = Math.max(0, Number(pensionContribution) || 0) + Math.max(0, Number(dependents) || 0) * 189.59;
+    const taxBase = Math.max(0, gross - Math.max(607.20, legalDeductions));
+    const band = irrfBands.find(item => taxBase <= item.limit) || irrfBands[irrfBands.length - 1];
+    const beforeReduction = Math.max(0, taxBase * band.rate - band.deduction);
+    const reduction = gross <= 5000 ? 312.89 : gross <= 7350 ? Math.max(0, 978.62 - 0.133145 * gross) : 0;
+    return roundMoney(Math.max(0, beforeReduction - Math.min(beforeReduction, reduction)));
+  }
+
+  function pensionForRegime(gross, regime, profile, fallbackGross = gross) {
+    if (regime === 'clt') return progressiveContribution(gross, employeeInssBands, INSS_CEILING);
+    if (regime === 'public-federal') return progressiveContribution(gross, federalRppsBands);
+    if (regime === 'public-local') {
+      const monthlyGross = Number(fallbackGross) || 0;
+      const monthlyPension = Math.min(monthlyGross, Math.max(0, Number(profile.publicPension) || 0));
+      return monthlyGross > 0 ? roundMoney(monthlyPension * Math.max(0, gross) / monthlyGross) : 0;
+    }
+    if (regime === 'self-employed') {
+      const mode = profile.contributionMode || '20';
+      if (mode === '11') return gross > 0 ? roundMoney(MINIMUM_WAGE * 0.11) : 0;
+      if (mode === '20') return gross > 0 ? progressiveContribution(Math.max(MINIMUM_WAGE, gross), [{ limit: INSS_CEILING, rate: 0.20 }], INSS_CEILING) : 0;
+    }
+    return 0;
+  }
+
+  function calculatePayroll(gross, regime, profile) {
+    const pension = pensionForRegime(gross, regime, profile);
+    const irrf = calculateIrrf(gross, pension, profile.dependents);
+    return { gross: roundMoney(gross), pension, irrf, net: roundMoney(gross - pension - irrf) };
+  }
+
+  function meiDas(activity) {
+    const inss = roundMoney(MINIMUM_WAGE * (activity === 'haul' ? 0.12 : 0.05));
+    const icms = activity === 'commerce' || activity === 'both' || activity === 'haul' ? 1 : 0;
+    const iss = activity === 'service' || activity === 'both' ? 5 : 0;
+    return { inss, icms, iss, total: roundMoney(inss + icms + iss) };
+  }
+
+  function calculateProfileIncome(profile) {
+    const fixed = Math.max(0, Number(profile.grossFixedIncome) || 0);
+    const variable = Math.max(0, Number(profile.grossVariableIncome) || 0);
+    const gross = fixed + variable;
+    const dependents = Number(profile.dependents) || 0;
+    const regime = profile.workRegime || 'clt';
+    const months = Math.min(12, Math.max(1, Number(profile.monthsWorked) || 12));
+    let pension = 0;
+    let irrf = 0;
+    let otherDeductions = 0;
+    let net = gross;
+    let employmentGross = 0;
+    let independentGross = 0;
+    let benefitRegime = null;
+    let needsActivity = false;
+    let notes = [];
+
+    if (regime === 'clt' || regime === 'public-federal' || regime === 'public-local') {
+      const payroll = calculatePayroll(gross, regime, profile);
+      pension = payroll.pension;
+      irrf = payroll.irrf;
+      net = payroll.net;
+      employmentGross = gross;
+      benefitRegime = regime;
+      if (regime === 'clt') notes.push('INSS progressivo e IRRF estimados pelas tabelas de 2026. Não inclui pensão alimentícia, plano de saúde, vale-transporte ou outros descontos do contracheque.');
+      if (regime === 'public-federal') notes.push('Usa a tabela RPPS da União de 2026; não inclui Funpresp, adicionais ou descontos específicos do órgão.');
+      if (regime === 'public-local') notes.push('O desconto RPPS varia por estado e município. Informe o valor mensal do contracheque; sem esse dado, o cálculo considera apenas o IRRF.');
+    } else if (regime === 'self-employed') {
+      pension = pensionForRegime(gross, regime, profile);
+      irrf = calculateIrrf(gross, pension, dependents);
+      net = roundMoney(gross - pension - irrf);
+      independentGross = gross;
+      notes.push('Estimativa do IRPF mensal sem despesas dedutíveis da atividade. A contribuição ao INSS depende do plano selecionado.');
+    } else if (regime === 'mei') {
+      if (gross > 0 && !profile.meiActivity) needsActivity = true;
+      const das = profile.meiActivity ? meiDas(profile.meiActivity) : { inss: 0, icms: 0, iss: 0, total: 0 };
+      pension = das.inss;
+      otherDeductions = das.icms + das.iss;
+      net = needsActivity ? 0 : roundMoney(gross - das.total);
+      independentGross = gross;
+      notes.push('Deduz o DAS-MEI de 2026 da receita bruta. Não desconta custos do negócio nem calcula IRPF sobre pró-labore ou lucro.');
+    } else if (regime === 'mixed') {
+      const variableRegime = profile.variableRegime || 'self-employed';
+      const payroll = calculatePayroll(fixed, 'clt', profile);
+      employmentGross = fixed + (variableRegime === 'clt' ? variable : 0);
+      if (variableRegime === 'clt') {
+        const combinedPayroll = calculatePayroll(employmentGross, 'clt', profile);
+        pension = combinedPayroll.pension;
+        irrf = combinedPayroll.irrf;
+        net = combinedPayroll.net;
+      } else if (variableRegime === 'self-employed') {
+        const independent = calculatePayroll(variable, 'self-employed', profile);
+        pension = payroll.pension + independent.pension;
+        irrf = payroll.irrf + independent.irrf;
+        net = payroll.net + independent.net;
+        independentGross = variable;
+      } else {
+        if (variable > 0 && !profile.meiActivity) needsActivity = true;
+        const das = profile.meiActivity ? meiDas(profile.meiActivity) : { inss: 0, icms: 0, iss: 0, total: 0 };
+        pension = payroll.pension + das.inss;
+        irrf = payroll.irrf;
+        otherDeductions = das.icms + das.iss;
+        net = needsActivity ? 0 : payroll.net + variable - das.total;
+        independentGross = variable;
+      }
+      benefitRegime = 'clt';
+      notes.push('No regime misto, a renda fixa é tratada como salário CLT e a renda variável conforme o tipo selecionado. A declaração anual pode ajustar impostos entre fontes pagadoras.');
+    } else {
+      otherDeductions = Math.min(gross, Math.max(0, Number(profile.otherDeductions) || 0));
+      net = roundMoney(gross - otherDeductions);
+      independentGross = gross;
+      notes.push('Informe manualmente os descontos que conhece. O PFO não presume regras tributárias para este regime.');
+    }
+
+    let thirteenth = null;
+    let vacation = null;
+    if (benefitRegime && employmentGross > 0) {
+      const thirteenthGross = roundMoney(employmentGross * months / 12);
+      const thirteenthPension = pensionForRegime(thirteenthGross, benefitRegime, profile, employmentGross);
+      const thirteenthIrrf = calculateIrrf(thirteenthGross, thirteenthPension, dependents);
+      const vacationGross = roundMoney(employmentGross * months / 12 * (4 / 3));
+      const vacationPension = pensionForRegime(vacationGross, benefitRegime, profile, employmentGross);
+      const vacationIrrf = calculateIrrf(vacationGross, vacationPension, dependents);
+      thirteenth = { gross: thirteenthGross, pension: thirteenthPension, irrf: thirteenthIrrf, net: roundMoney(thirteenthGross - thirteenthPension - thirteenthIrrf) };
+      vacation = { gross: vacationGross, bonus: roundMoney(vacationGross / 4), pension: vacationPension, irrf: vacationIrrf, net: roundMoney(vacationGross - vacationPension - vacationIrrf) };
+      notes.push('13º proporcional aos meses informados. Férias estimadas como remuneração proporcional mais 1/3 constitucional, sem abono pecuniário ou adicionais variáveis específicos.');
+    }
+
+    const reserves = independentGross > 0 ? {
+      thirteenthMonthly: roundMoney(independentGross / 12),
+      vacationMonthly: roundMoney(independentGross / 9)
+    } : null;
+    if (reserves) notes.push('Autônomos e MEI não recebem 13º ou férias como benefícios trabalhistas; os valores abaixo são reservas mensais opcionais para planejamento.');
+
+    const legacy = profile.legacyNetIncome || {};
+    const legacyNet = (Number(legacy.fixed) || 0) + (Number(legacy.variable) || 0);
+    const hasGross = gross > 0;
+    const monthlyNet = hasGross && !needsActivity ? roundMoney(net) : !hasGross && legacyNet > 0 ? legacyNet : null;
+    return { gross: roundMoney(gross), pension: roundMoney(pension), irrf: roundMoney(irrf), otherDeductions: roundMoney(otherDeductions), monthlyNet, employmentGross, independentGross, thirteenth, vacation, reserves, notes, hasGross, legacyNet, regime, needsActivity };
+  }
+
   function profileTotals(profile) {
-    const fixedIncome = Number(profile.fixedIncome) || 0;
-    const variableIncome = Number(profile.variableIncome) || 0;
+    const calculation = calculateProfileIncome(profile);
     const monthlyExpenses = (profile.expenseItems || []).reduce((total, item) => total + (Number(item.amount) || 0), 0);
-    const monthlyIncome = fixedIncome + variableIncome;
-    return { fixedIncome, variableIncome, monthlyIncome, monthlyExpenses, estimatedMargin: monthlyIncome - monthlyExpenses };
+    const monthlyIncome = calculation.monthlyNet ?? 0;
+    return { monthlyIncome, monthlyExpenses, estimatedMargin: monthlyIncome - monthlyExpenses, calculation };
   }
 
   function profileMetricsHTML(profile, compact = false) {
     const totals = profileTotals(profile);
     const marginLabel = totals.estimatedMargin < 0 ? 'Diferença estimada' : 'Margem estimada';
-    return `<div class="profile-metric"><span>Renda mensal</span><strong>${money(totals.monthlyIncome)}</strong></div><div class="profile-metric"><span>Gastos pessoais</span><strong>${money(totals.monthlyExpenses)}</strong></div><div class="profile-metric ${totals.estimatedMargin < 0 ? 'profile-metric-negative' : ''}"><span>${marginLabel}</span><strong>${money(totals.estimatedMargin)}</strong></div>${compact ? '' : `<p class="profile-calculation-note">${escapeHTML(profile.name ? `${profile.name}, esta é uma estimativa baseada nos valores informados.` : 'Estimativa baseada nos valores informados.')}</p>`}`;
+    const incomeLabel = totals.calculation.hasGross ? 'Renda após descontos' : totals.calculation.legacyNet > 0 ? 'Renda líquida anterior' : 'Renda estimada';
+    const incomeValue = totals.calculation.needsActivity ? 'Selecione a atividade' : money(totals.monthlyIncome);
+    const marginValue = totals.calculation.needsActivity ? 'Aguardando dados' : money(totals.estimatedMargin);
+    return `<div class="profile-metric"><span>${incomeLabel}</span><strong>${incomeValue}</strong></div><div class="profile-metric"><span>Gastos pessoais</span><strong>${money(totals.monthlyExpenses)}</strong></div><div class="profile-metric ${!totals.calculation.needsActivity && totals.estimatedMargin < 0 ? 'profile-metric-negative' : ''}"><span>${marginLabel}</span><strong>${marginValue}</strong></div>${compact ? '' : `<p class="profile-calculation-note">${escapeHTML(profile.name ? `${profile.name}, esta é uma estimativa baseada nos valores informados.` : 'Estimativa baseada nos valores informados.')}</p>`}`;
   }
 
   function renderProfileOverview() {
@@ -170,12 +358,22 @@
 
   function profileFromForm(form) {
     const data = new FormData(form);
+    const grossFixedIncome = Number(data.get('grossFixedIncome')) || 0;
+    const grossVariableIncome = Number(data.get('grossVariableIncome')) || 0;
     return {
       saved: true,
       name: String(data.get('name') || '').trim(),
       workRegime: String(data.get('workRegime') || 'other'),
-      fixedIncome: Number(data.get('fixedIncome')) || 0,
-      variableIncome: Number(data.get('variableIncome')) || 0,
+      grossFixedIncome,
+      grossVariableIncome,
+      legacyNetIncome: grossFixedIncome + grossVariableIncome > 0 ? null : state.profile.legacyNetIncome || null,
+      monthsWorked: Number(data.get('monthsWorked')) || 12,
+      dependents: Number(data.get('dependents')) || 0,
+      variableRegime: String(data.get('variableRegime') || 'self-employed'),
+      meiActivity: String(data.get('meiActivity') || ''),
+      contributionMode: String(data.get('contributionMode') || '20'),
+      publicPension: Number(data.get('publicPension')) || 0,
+      otherDeductions: Number(data.get('otherDeductions')) || 0,
       expenseItems: profileExpenseDraft.map(item => ({ ...item }))
     };
   }
@@ -184,16 +382,79 @@
     const form = document.getElementById('profile-form');
     const profile = state.profile || {};
     form.elements.name.value = profile.name || '';
-    form.elements.workRegime.value = profile.workRegime || 'employee';
-    form.elements.fixedIncome.value = profile.fixedIncome ?? '';
-    form.elements.variableIncome.value = profile.variableIncome ?? '';
+    form.elements.workRegime.value = profile.workRegime || 'clt';
+    form.elements.grossFixedIncome.value = profile.grossFixedIncome ?? '';
+    form.elements.grossVariableIncome.value = profile.grossVariableIncome ?? '';
+    form.elements.monthsWorked.value = profile.monthsWorked ?? 12;
+    form.elements.dependents.value = profile.dependents ?? 0;
+    form.elements.variableRegime.value = profile.variableRegime || 'self-employed';
+    form.elements.meiActivity.value = profile.meiActivity || '';
+    form.elements.contributionMode.value = profile.contributionMode || '20';
+    form.elements.publicPension.value = profile.publicPension ?? '';
+    form.elements.otherDeductions.value = profile.otherDeductions ?? '';
+    updateProfileRegimeFields();
     renderProfileExpenseList();
     renderProfileEstimate(profile.saved ? profile : profileFromForm(form));
   }
 
   function renderProfileEstimate(profile) {
+    const legacyNote = document.getElementById('profile-legacy-income-note');
+    const oldNet = (Number(profile.legacyNetIncome?.fixed) || 0) + (Number(profile.legacyNetIncome?.variable) || 0);
+    if (oldNet > 0 && !(Number(profile.grossFixedIncome) || 0) && !(Number(profile.grossVariableIncome) || 0)) {
+      legacyNote.textContent = `Sua renda de referência anterior (${money(oldNet)}) estava cadastrada como líquida. Informe o valor bruto para calcular os descontos corretamente; o valor anterior foi mantido como referência até lá.`;
+      legacyNote.hidden = false;
+    } else legacyNote.hidden = true;
     document.getElementById('profile-estimate').innerHTML = `<div class="profile-metrics">${profileMetricsHTML(profile)}</div>`;
+    renderSalaryCalculation(profile);
     renderProfileExpenseSummary(profile.expenseItems || []);
+  }
+
+  function updateProfileRegimeFields() {
+    const form = document.getElementById('profile-form');
+    const regime = form.elements.workRegime.value;
+    const variableRegime = form.elements.variableRegime.value;
+    document.getElementById('mixed-income-note').hidden = regime !== 'mixed';
+    document.getElementById('mixed-variable-field').hidden = regime !== 'mixed';
+    document.getElementById('mei-activity-field').hidden = regime !== 'mei' && !(regime === 'mixed' && variableRegime === 'mei');
+    document.getElementById('independent-contribution-field').hidden = regime !== 'self-employed' && !(regime === 'mixed' && variableRegime === 'self-employed');
+    document.getElementById('public-pension-field').hidden = regime !== 'public-local';
+    document.getElementById('other-deductions-field').hidden = regime !== 'other';
+    const meiIncome = Number(form.elements.grossFixedIncome.value) + Number(form.elements.grossVariableIncome.value);
+    form.elements.meiActivity.required = !document.getElementById('mei-activity-field').hidden && meiIncome > 0;
+  }
+
+  function renderSalaryCalculation(profile) {
+    const root = document.getElementById('salary-calculation');
+    const result = calculateProfileIncome(profile);
+    if (result.needsActivity) {
+      root.innerHTML = '<div class="salary-empty">Selecione a atividade do MEI para calcular o DAS e a renda após esse desconto.</div>';
+      return;
+    }
+    if (!result.hasGross) {
+      root.innerHTML = result.legacyNet > 0
+        ? '<div class="salary-empty">Preencha a renda bruta para ver INSS, IRRF, 13º e férias. A renda líquida anterior continua sendo usada na estimativa de margem enquanto isso.</div>'
+        : '<div class="salary-empty">Informe sua renda bruta para ver a estimativa dos descontos e benefícios aplicáveis ao regime escolhido.</div>';
+      return;
+    }
+    const meiOnly = result.regime === 'mei';
+    const mixedMei = result.regime === 'mixed' && result.independentGross > 0 && profile.variableRegime === 'mei';
+    const contributionLabel = meiOnly ? 'DAS-MEI estimado' : mixedMei ? 'INSS + DAS-MEI' : result.regime === 'public-federal' || result.regime === 'public-local' ? 'Previdência / RPPS' : 'INSS estimado';
+    const metrics = [
+      ['Renda bruta mensal', money(result.gross)],
+      [contributionLabel, money(meiOnly || mixedMei ? result.pension + result.otherDeductions : result.pension)],
+      ['IRRF estimado', money(result.irrf)],
+      ...(result.otherDeductions && !meiOnly ? [['Outros tributos/descontos', money(result.otherDeductions)]] : []),
+      ['Renda após descontos estimados', money(result.monthlyNet)]
+    ];
+    const reserveMarkup = result.reserves ? `
+      <div class="salary-reserve"><h3>Reserva mensal opcional — renda sem benefício trabalhista</h3><div><span>Para um 13º equivalente</span><strong>${money(result.reserves.thirteenthMonthly)}</strong></div><div><span>Para um mês de férias + 1/3</span><strong>${money(result.reserves.vacationMonthly)}</strong></div></div>` : '';
+    const benefitMarkup = result.thirteenth && result.vacation ? `
+      <div class="salary-benefit-grid">
+        <article class="salary-benefit"><h3>13º salário estimado</h3><div><span>Bruto</span><strong>${money(result.thirteenth.gross)}</strong></div><div><span>INSS / previdência + IRRF</span><strong>${money(result.thirteenth.pension + result.thirteenth.irrf)}</strong></div><div><span>Líquido estimado</span><strong>${money(result.thirteenth.net)}</strong></div></article>
+        <article class="salary-benefit"><h3>Férias + 1/3 estimadas</h3><div><span>Total bruto</span><strong>${money(result.vacation.gross)}</strong></div><div><span>Adicional de 1/3 incluído</span><strong>${money(result.vacation.bonus)}</strong></div><div><span>INSS / previdência + IRRF</span><strong>${money(result.vacation.pension + result.vacation.irrf)}</strong></div><div><span>Líquido estimado</span><strong>${money(result.vacation.net)}</strong></div></article>
+      </div>${reserveMarkup}` : reserveMarkup;
+    const notes = result.notes.map(note => `<p class="salary-note">${escapeHTML(note)}</p>`).join('');
+    root.innerHTML = `<div class="salary-calculation-heading"><strong>Simulação estimada · tabelas ${TAX_YEAR}</strong><span>Os valores podem variar conforme folha, deduções e regras do órgão.</span></div><div class="salary-metrics">${metrics.map(([label, value], index) => `<div class="salary-metric ${index === metrics.length - 1 ? 'salary-metric-net' : ''}"><span>${label}</span><strong>${value}</strong></div>`).join('')}</div>${benefitMarkup}${notes}`;
   }
 
   function profileCategoryTotalsHTML(items) {
@@ -333,7 +594,10 @@
 
   const profileForm = document.getElementById('profile-form');
   profileForm.addEventListener('input', () => renderProfileEstimate(profileFromForm(profileForm)));
-  profileForm.addEventListener('change', () => renderProfileEstimate(profileFromForm(profileForm)));
+  profileForm.addEventListener('change', () => {
+    updateProfileRegimeFields();
+    renderProfileEstimate(profileFromForm(profileForm));
+  });
   document.getElementById('add-profile-expense').addEventListener('click', () => {
     const description = document.getElementById('profile-expense-description');
     const amount = document.getElementById('profile-expense-amount');
