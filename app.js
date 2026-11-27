@@ -9,12 +9,12 @@
     try {
       const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
       if (stored && Array.isArray(stored.entries) && Array.isArray(stored.goals)) {
-        return { entries: stored.entries, goals: stored.goals, openingBalances: stored.openingBalances || {} };
+        return { entries: stored.entries, goals: stored.goals, openingBalances: stored.openingBalances || {}, profile: stored.profile || {} };
       }
     } catch (error) {
       console.warn('Não foi possível ler os dados locais.', error);
     }
-    return { entries: [], goals: [], openingBalances: {} };
+    return { entries: [], goals: [], openingBalances: {}, profile: {} };
   }
 
   const state = loadState();
@@ -101,6 +101,68 @@
       <div class="income-source"><div><span class="source-name">${escapeHTML(item.description)}</span><span class="source-type ${item.incomeType === 'variable' ? 'variable' : ''}">${item.incomeType === 'fixed' ? 'Fixa' : 'Variável'}</span><div class="item-secondary">${item.pending ? `${money(item.pending)} prevista` : 'Recebida no mês'}</div></div><strong class="source-total">${money(item.amount)}</strong></div>`).join('') : '<div class="empty-state">Adicione uma fonte de renda para acompanhar entradas fixas e variáveis.</div>';
   }
 
+  const expenseFields = ['housing', 'food', 'bills', 'transport', 'healthEducation', 'personal', 'other'];
+  const workRegimes = {
+    employee: 'Emprego assalariado',
+    'self-employed': 'Autônomo(a) / freelancer',
+    'business-owner': 'Empreendedor(a) / MEI',
+    mixed: 'Renda de mais de um regime',
+    other: 'Outro / em transição'
+  };
+
+  function profileTotals(profile) {
+    const fixedIncome = Number(profile.fixedIncome) || 0;
+    const variableIncome = Number(profile.variableIncome) || 0;
+    const expenses = profile.expenses || {};
+    const monthlyExpenses = expenseFields.reduce((total, key) => total + (Number(expenses[key]) || 0), 0);
+    const monthlyIncome = fixedIncome + variableIncome;
+    return { fixedIncome, variableIncome, monthlyIncome, monthlyExpenses, estimatedMargin: monthlyIncome - monthlyExpenses };
+  }
+
+  function profileMetricsHTML(profile, compact = false) {
+    const totals = profileTotals(profile);
+    const marginLabel = totals.estimatedMargin < 0 ? 'Diferença estimada' : 'Margem estimada';
+    return `<div class="profile-metric"><span>Renda mensal</span><strong>${money(totals.monthlyIncome)}</strong></div><div class="profile-metric"><span>Gastos pessoais</span><strong>${money(totals.monthlyExpenses)}</strong></div><div class="profile-metric ${totals.estimatedMargin < 0 ? 'profile-metric-negative' : ''}"><span>${marginLabel}</span><strong>${money(totals.estimatedMargin)}</strong></div>${compact ? '' : `<p class="profile-calculation-note">${escapeHTML(profile.name ? `${profile.name}, esta é uma estimativa baseada nos valores informados.` : 'Estimativa baseada nos valores informados.')}</p>`}`;
+  }
+
+  function renderProfileOverview() {
+    const root = document.getElementById('profile-overview');
+    if (!root) return;
+    if (!state.profile?.saved) {
+      root.innerHTML = '<div class="profile-empty"><span>Complete o perfil com sua renda e seus gastos mensais de referência para ver uma estimativa aqui.</span><button class="text-button" data-go="profile">Preencher perfil <span aria-hidden="true">→</span></button></div>';
+      return;
+    }
+    root.innerHTML = `<div class="profile-regime">${escapeHTML(workRegimes[state.profile.workRegime] || workRegimes.other)}${state.profile.name ? ` · ${escapeHTML(state.profile.name)}` : ''}</div><div class="profile-metrics">${profileMetricsHTML(state.profile, true)}</div>`;
+  }
+
+  function profileFromForm(form) {
+    const data = new FormData(form);
+    const expenses = Object.fromEntries(expenseFields.map(key => [key, Number(data.get(key)) || 0]));
+    return {
+      saved: true,
+      name: String(data.get('name') || '').trim(),
+      workRegime: String(data.get('workRegime') || 'other'),
+      fixedIncome: Number(data.get('fixedIncome')) || 0,
+      variableIncome: Number(data.get('variableIncome')) || 0,
+      expenses
+    };
+  }
+
+  function renderProfileForm() {
+    const form = document.getElementById('profile-form');
+    const profile = state.profile || {};
+    form.elements.name.value = profile.name || '';
+    form.elements.workRegime.value = profile.workRegime || 'employee';
+    form.elements.fixedIncome.value = profile.fixedIncome ?? '';
+    form.elements.variableIncome.value = profile.variableIncome ?? '';
+    expenseFields.forEach(key => { form.elements[key].value = profile.expenses?.[key] ?? ''; });
+    renderProfileEstimate(profile.saved ? profile : profileFromForm(form));
+  }
+
+  function renderProfileEstimate(profile) {
+    document.getElementById('profile-estimate').innerHTML = `<div class="profile-metrics">${profileMetricsHTML(profile)}</div>`;
+  }
+
   function renderTransactions() {
     const filter = document.getElementById('transaction-filter').value;
     const entries = monthEntries().filter(item => filter === 'all' || item.type === filter || (filter === 'expense' && item.type !== 'income' && item.status === 'paid'))
@@ -154,6 +216,7 @@
     renderTransactions();
     renderPlanning();
     renderGoals();
+    renderProfileOverview();
   }
 
   function escapeHTML(value) {
@@ -195,7 +258,10 @@
   }
 
   document.querySelectorAll('.nav-link[data-view]').forEach(button => button.addEventListener('click', () => switchView(button.dataset.view)));
-  document.querySelectorAll('[data-go]').forEach(button => button.addEventListener('click', () => switchView(button.dataset.go)));
+  document.body.addEventListener('click', event => {
+    const goButton = event.target.closest('[data-go]');
+    if (goButton) switchView(goButton.dataset.go);
+  });
   document.getElementById('prev-month').addEventListener('click', () => { selectedMonth = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() - 1, 1); renderAll(); });
   document.getElementById('next-month').addEventListener('click', () => { selectedMonth = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 1); renderAll(); });
   document.getElementById('new-transaction').addEventListener('click', () => openTransaction('income'));
@@ -204,6 +270,18 @@
   document.getElementById('new-bill').addEventListener('click', () => openTransaction('bill'));
   document.getElementById('entry-kind').addEventListener('change', updateTransactionFields);
   document.getElementById('transaction-form').elements.incomeType.addEventListener('change', updateTransactionFields);
+
+  const profileForm = document.getElementById('profile-form');
+  profileForm.addEventListener('input', () => renderProfileEstimate(profileFromForm(profileForm)));
+  profileForm.addEventListener('change', () => renderProfileEstimate(profileFromForm(profileForm)));
+  profileForm.addEventListener('submit', event => {
+    event.preventDefault();
+    state.profile = profileFromForm(event.currentTarget);
+    save();
+    renderProfileOverview();
+    renderProfileEstimate(state.profile);
+    showToast('Perfil salvo. A estimativa mensal foi atualizada.');
+  });
   document.getElementById('transaction-filter').addEventListener('change', renderTransactions);
 
   document.getElementById('edit-opening-balance').addEventListener('click', () => {
@@ -323,6 +401,7 @@
     dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
   });
 
+  renderProfileForm();
   renderAll();
 })();
 
