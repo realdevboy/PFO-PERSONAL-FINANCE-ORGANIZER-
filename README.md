@@ -9,6 +9,8 @@ Organizador financeiro pessoal em português para pessoas com renda fixa, variá
 - Registrar despesas pagas e contas futuras, e marcar contas como pagas.
 - Ver saldo disponível, entradas, gastos, contas previstas e gastos por categoria.
 - Criar metas, adicionar novos valores guardados e acompanhar o progresso.
+- Preencher um perfil financeiro com regime de trabalho, renda mensal de referência e gastos pessoais por categoria.
+- Consultar a margem mensal estimada no perfil e na visão geral, sem misturá-la ao saldo real ou duplicar lançamentos.
 - Navegar entre meses e informar o saldo que havia nas contas no início de cada mês.
 - Usar a interface em celular ou computador.
 
@@ -24,7 +26,7 @@ Depois acesse `http://localhost:8000`.
 
 ## Dados e privacidade
 
-Esta versão não tem servidor, login ou conexão bancária. Os registros ficam no `localStorage` do navegador neste dispositivo. Limpar os dados do navegador pode apagar os registros; não use dados financeiros reais até decidir e implementar uma estratégia de armazenamento e backup adequada.
+Esta versão não tem servidor, login ou conexão bancária. Os registros e o perfil financeiro ficam no `localStorage` do navegador neste dispositivo. Limpar os dados do navegador pode apagar as informações. Os valores do perfil são referências informadas pela pessoa usuária; para acompanhar o saldo real, registre recebimentos e despesas nas respectivas áreas. Não use dados financeiros reais até decidir e implementar uma estratégia de armazenamento e backup adequada.
 
 ## Limites desta versão
 
