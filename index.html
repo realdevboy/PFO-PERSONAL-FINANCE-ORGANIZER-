@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#f5f7f4">
   <meta name="description" content="Organize rendas fixas e variáveis, contas, gastos e metas em um só lugar.">
   <title>PFO — organização financeira</title>
-  <link rel="stylesheet" href="styles.css?v=profile-income-schedule-2026-11-27">
-  <script src="app.js?v=profile-income-schedule-2026-11-27" defer></script>
+  <link rel="stylesheet" href="styles.css?v=contract-benefits-2026-11-27">
+  <script src="app.js?v=contract-benefits-2026-11-27" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -124,6 +124,26 @@
               <label class="field full" id="public-pension-field" hidden>Previdência descontada no contracheque (R$)<input name="publicPension" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Digite o valor mensal"><span class="field-help">Encontre esse valor no seu contracheque. Se não souber, deixe em branco.</span></label>
               <label class="field full" id="other-deductions-field" hidden>Outros descontos mensais que você conhece (R$)<input name="otherDeductions" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Se não tiver, deixe em 0"></label>
             </div>
+            <details class="profile-calculation-details profile-contract-benefits" id="contract-benefits-details" hidden>
+              <summary>Tenho valores extras acertados em contrato (opcional)</summary>
+              <p class="field-help">Cadastre valores e datas que constam no seu contrato para prevê-los no painel. O PFO não classifica a relação de trabalho nem calcula tributos desses pagamentos extras.</p>
+              <label class="field contract-benefit-base-field">Qual valor mensal serve de base?<select name="contractBenefitBase"><option value="gross">Minha renda antes dos descontos</option><option value="net">Minha renda após os descontos estimados</option><option value="custom">Outro valor mensal combinado</option></select><span class="field-help">Confira no contrato qual valor deve ser usado no cálculo.</span></label>
+              <label class="field contract-benefit-custom-base" id="contract-benefit-custom-base" hidden>Valor mensal combinado no contrato (R$)<input name="contractBenefitCustomBase" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="Ex.: 5.000,00"></label>
+              <div class="contract-benefit-option">
+                <label class="checkbox-field"><input name="contractThirteenthEnabled" type="checkbox">Meu contrato prevê um pagamento anual equivalente ao 13º</label>
+                <div class="form-grid contract-benefit-fields" id="contract-thirteenth-fields" hidden>
+                  <label class="field">Percentual da base<input name="contractThirteenthPercent" type="number" min="0.01" max="1000" step="0.01" value="100"><span class="field-help">100% equivale a uma mensalidade inteira.</span></label>
+                  <label class="field">Data prevista para o próximo pagamento<input name="contractThirteenthDate" type="date"><span class="field-help">Depois, o PFO prevê a repetição anual nessa data.</span></label>
+                </div>
+              </div>
+              <div class="contract-benefit-option">
+                <label class="checkbox-field"><input name="contractVacationEnabled" type="checkbox">Meu contrato prevê um adicional de férias</label>
+                <div class="form-grid contract-benefit-fields" id="contract-vacation-fields" hidden>
+                  <label class="field">Percentual da base<input name="contractVacationPercent" type="number" min="0.01" max="1000" step="0.01" value="33.33"><span class="field-help">33,33% equivale a aproximadamente um terço.</span></label>
+                  <label class="field">Data prevista para o próximo pagamento<input name="contractVacationDate" type="date"><span class="field-help">Depois, o PFO prevê a repetição anual nessa data.</span></label>
+                </div>
+              </div>
+            </details>
             <div id="salary-calculation" class="salary-calculation" aria-live="polite"></div>
           </section>
           <section class="profile-section" aria-labelledby="profile-expenses-title">

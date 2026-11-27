@@ -236,6 +236,11 @@
     return { inss, icms, iss, total: roundMoney(inss + icms + iss) };
   }
 
+  function contractBenefitsEligible(profile) {
+    if (['self-employed', 'mei', 'other'].includes(profile.workRegime)) return true;
+    return profile.workRegime === 'mixed' && ['self-employed', 'mei'].includes(profile.variableRegime);
+  }
+
   function calculateProfileIncome(profile) {
     const fixed = Math.max(0, Number(profile.grossFixedIncome) || 0);
     const variable = Math.max(0, Number(profile.grossVariableIncome) || 0);
@@ -328,13 +333,30 @@
       thirteenthMonthly: roundMoney(independentGross / 12),
       vacationMonthly: roundMoney(independentGross / 9)
     } : null;
-    if (reserves) notes.push('Autônomos e MEI não recebem 13º ou férias como benefícios trabalhistas; os valores abaixo são reservas mensais opcionais para planejamento.');
+    if (reserves) notes.push('Autônomos e MEI não têm 13º ou férias calculados automaticamente como benefício trabalhista. As reservas abaixo são opcionais; valores acertados em contrato podem ser informados separadamente.');
 
     const legacy = profile.legacyNetIncome || {};
     const legacyNet = (Number(legacy.fixed) || 0) + (Number(legacy.variable) || 0);
     const hasGross = gross > 0;
     const monthlyNet = hasGross && !needsActivity ? roundMoney(net) : !hasGross && legacyNet > 0 ? legacyNet : null;
-    return { gross: roundMoney(gross), pension: roundMoney(pension), irrf: roundMoney(irrf), otherDeductions: roundMoney(otherDeductions), monthlyNet, employmentGross, independentGross, thirteenth, vacation, reserves, notes, hasGross, legacyNet, regime, needsActivity };
+    const contractBaseType = profile.contractBenefitBase || 'gross';
+    const contractBase = contractBaseType === 'gross' ? gross : contractBaseType === 'custom' ? Math.max(0, Number(profile.contractBenefitCustomBase) || 0) : Math.max(0, monthlyNet || 0);
+    const contractBenefits = {
+      applicable: contractBenefitsEligible(profile),
+      base: contractBase,
+      baseType: contractBaseType,
+      thirteenth: profile.contractThirteenthEnabled ? {
+        amount: roundMoney(contractBase * Math.max(0, Number(profile.contractThirteenthPercent) || 0) / 100),
+        percent: Number(profile.contractThirteenthPercent) || 0,
+        date: profile.contractThirteenthDate || ''
+      } : null,
+      vacation: profile.contractVacationEnabled ? {
+        amount: roundMoney(contractBase * Math.max(0, Number(profile.contractVacationPercent) || 0) / 100),
+        percent: Number(profile.contractVacationPercent) || 0,
+        date: profile.contractVacationDate || ''
+      } : null
+    };
+    return { gross: roundMoney(gross), pension: roundMoney(pension), irrf: roundMoney(irrf), otherDeductions: roundMoney(otherDeductions), monthlyNet, employmentGross, independentGross, thirteenth, vacation, reserves, contractBenefits, notes, hasGross, legacyNet, regime, needsActivity };
   }
 
   function profileTotals(profile) {
@@ -375,6 +397,14 @@
       grossVariableIncome,
       profileIncomeEnabled: data.get('profileIncomeEnabled') === 'on',
       paymentDay: Number(data.get('paymentDay')) || null,
+      contractBenefitBase: String(data.get('contractBenefitBase') || 'gross'),
+      contractBenefitCustomBase: Number(data.get('contractBenefitCustomBase')) || 0,
+      contractThirteenthEnabled: data.get('contractThirteenthEnabled') === 'on',
+      contractThirteenthPercent: Number(data.get('contractThirteenthPercent')),
+      contractThirteenthDate: String(data.get('contractThirteenthDate') || ''),
+      contractVacationEnabled: data.get('contractVacationEnabled') === 'on',
+      contractVacationPercent: Number(data.get('contractVacationPercent')),
+      contractVacationDate: String(data.get('contractVacationDate') || ''),
       legacyNetIncome: grossFixedIncome + grossVariableIncome > 0 ? null : state.profile.legacyNetIncome || null,
       monthsWorked: Number(data.get('monthsWorked')) || 12,
       dependents: Number(data.get('dependents')) || 0,
@@ -393,6 +423,25 @@
     state.entries = state.entries.filter(item => !(item.profileGenerated && item.status !== 'received' && item.date >= todayKey));
 
     const calculation = calculateProfileIncome(profile);
+    const contractBenefits = calculation.contractBenefits;
+    const upcomingContractPayments = [
+      ['contract-thirteenth', '13º previsto em contrato', contractBenefits.thirteenth],
+      ['contract-vacation', 'Adicional de férias previsto em contrato', contractBenefits.vacation]
+    ];
+    if (contractBenefits.applicable) upcomingContractPayments.forEach(([kind, description, benefit]) => {
+      if (!benefit?.date || !(benefit.amount > 0)) return;
+      const [inputYear, inputMonth, inputDay] = benefit.date.split('-').map(Number);
+      if (!inputYear || !inputMonth || !inputDay) return;
+      let paymentYear = inputYear;
+      let date = paymentDateValue(paymentYear, inputMonth - 1, inputDay);
+      while (date < todayKey) date = paymentDateValue(++paymentYear, inputMonth - 1, inputDay);
+      const alreadyReceived = state.entries.some(item => item.profileGeneratedKind === kind && item.date === date && item.status === 'received');
+      if (alreadyReceived) return;
+      state.entries.push({
+        id: newId(), type: 'income', description, amount: benefit.amount, date, category: '', incomeType: 'variable',
+        status: 'planned', profileGenerated: true, profileGeneratedKind: kind, createdAt: Date.now()
+      });
+    });
     const paymentDay = Number(profile.paymentDay);
     if (!profile.profileIncomeEnabled || !calculation.hasGross || calculation.needsActivity || !(calculation.monthlyNet > 0) || paymentDay < 1 || paymentDay > 31) return;
 
@@ -432,6 +481,14 @@
     form.elements.grossVariableIncome.value = profile.grossVariableIncome ?? '';
     form.elements.profileIncomeEnabled.checked = profile.profileIncomeEnabled ?? true;
     form.elements.paymentDay.value = profile.paymentDay ?? '';
+    form.elements.contractBenefitBase.value = profile.contractBenefitBase || 'gross';
+    form.elements.contractBenefitCustomBase.value = profile.contractBenefitCustomBase ?? '';
+    form.elements.contractThirteenthEnabled.checked = profile.contractThirteenthEnabled ?? false;
+    form.elements.contractThirteenthPercent.value = profile.contractThirteenthPercent ?? 100;
+    form.elements.contractThirteenthDate.value = profile.contractThirteenthDate || '';
+    form.elements.contractVacationEnabled.checked = profile.contractVacationEnabled ?? false;
+    form.elements.contractVacationPercent.value = profile.contractVacationPercent ?? 33.33;
+    form.elements.contractVacationDate.value = profile.contractVacationDate || '';
     form.elements.monthsWorked.value = profile.monthsWorked ?? 12;
     form.elements.dependents.value = profile.dependents ?? 0;
     form.elements.variableRegime.value = profile.variableRegime || 'self-employed';
@@ -481,19 +538,47 @@
     document.getElementById('profile-income-schedule-fields').hidden = !incomeScheduleEnabled;
     const calculation = calculateProfileIncome(profileFromForm(form));
     form.elements.paymentDay.required = incomeScheduleEnabled && calculation.hasGross && !calculation.needsActivity && calculation.monthlyNet > 0;
+    const contractEligible = contractBenefitsEligible({ workRegime: regime, variableRegime });
+    const contractDetails = document.getElementById('contract-benefits-details');
+    contractDetails.hidden = !contractEligible;
+    const hasContractBenefit = form.elements.contractThirteenthEnabled.checked || form.elements.contractVacationEnabled.checked;
+    document.getElementById('contract-benefit-custom-base').hidden = form.elements.contractBenefitBase.value !== 'custom';
+    form.elements.contractBenefitCustomBase.required = false;
+    document.getElementById('contract-thirteenth-fields').hidden = !form.elements.contractThirteenthEnabled.checked;
+    document.getElementById('contract-vacation-fields').hidden = !form.elements.contractVacationEnabled.checked;
+    form.elements.contractThirteenthPercent.required = false;
+    form.elements.contractThirteenthDate.required = false;
+    form.elements.contractVacationPercent.required = false;
+    form.elements.contractVacationDate.required = false;
+  }
+
+  function contractBenefitsPreview(result) {
+    const benefits = result.contractBenefits;
+    if (!benefits?.applicable) return '';
+    const rows = [
+      ['Pagamento anual equivalente ao 13º', benefits.thirteenth],
+      ['Adicional de férias', benefits.vacation]
+    ].filter(([, benefit]) => benefit && benefit.amount > 0);
+    if (!rows.length) return '';
+    const cards = rows.map(([label, benefit]) => {
+      const date = benefit.date ? new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }).format(dateFromInput(benefit.date)) : 'Escolha uma data';
+      return `<div><span>${label} · ${benefit.percent}% da base</span><strong>${money(benefit.amount)}</strong><small>Pagamento informado: ${escapeHTML(date)}</small></div>`;
+    }).join('');
+    return `<div class="salary-contract-benefits"><h3>Valores extras previstos em contrato</h3>${cards}<p class="salary-note">Estimativa conforme a base, o percentual e a data informados. O PFO não acrescenta descontos ou impostos a estes valores.</p></div>`;
   }
 
   function renderSalaryCalculation(profile) {
     const root = document.getElementById('salary-calculation');
     const result = calculateProfileIncome(profile);
+    const contractPreview = contractBenefitsPreview(result);
     if (result.needsActivity) {
-      root.innerHTML = '<div class="salary-empty">Selecione a atividade do MEI para calcular o DAS e a renda após esse desconto.</div>';
+      root.innerHTML = `<div class="salary-empty">Selecione a atividade do MEI para calcular o DAS e a renda após esse desconto.</div>${contractPreview}`;
       return;
     }
     if (!result.hasGross) {
       root.innerHTML = result.legacyNet > 0
-        ? '<div class="salary-empty">Preencha a renda bruta para ver INSS, IRRF, 13º e férias. A renda líquida anterior continua sendo usada na estimativa de margem enquanto isso.</div>'
-        : '<div class="salary-empty">Informe sua renda bruta para ver a estimativa dos descontos e benefícios aplicáveis ao regime escolhido.</div>';
+        ? `<div class="salary-empty">Preencha a renda bruta para ver INSS, IRRF, 13º e férias. A renda líquida anterior continua sendo usada na estimativa de margem enquanto isso.</div>${contractPreview}`
+        : `<div class="salary-empty">Informe sua renda bruta para ver a estimativa dos descontos e benefícios aplicáveis ao regime escolhido.</div>${contractPreview}`;
       return;
     }
     const meiOnly = result.regime === 'mei';
@@ -515,7 +600,7 @@
         <article class="salary-benefit"><h3>Férias + 1/3 estimadas</h3><div><span>Total bruto</span><strong>${money(result.vacation.gross)}</strong></div><div><span>Adicional de 1/3 incluído</span><strong>${money(result.vacation.bonus)}</strong></div><div><span>INSS / previdência + IRRF</span><strong>${money(result.vacation.pension + result.vacation.irrf)}</strong></div><div><span>Líquido estimado</span><strong>${money(result.vacation.net)}</strong></div></article>
       </div>${reserveMarkup}` : reserveMarkup;
     const notes = result.notes.map(note => `<p class="salary-note">${escapeHTML(note)}</p>`).join('');
-    root.innerHTML = `<div class="salary-calculation-heading"><strong>Confira os descontos antes de salvar</strong><span>Prévia atualizada ao preencher · estimativa pelas regras de ${TAX_YEAR}</span></div><div class="salary-metrics">${metrics.map(([label, value], index) => `<div class="salary-metric ${label.startsWith('Total descontado') ? 'salary-metric-total' : ''} ${index === metrics.length - 1 ? 'salary-metric-net' : ''}"><span>${label}</span><strong>${value}</strong></div>`).join('')}</div>${benefitMarkup}${notes}`;
+    root.innerHTML = `<div class="salary-calculation-heading"><strong>Confira os descontos antes de salvar</strong><span>Prévia atualizada ao preencher · estimativa pelas regras de ${TAX_YEAR}</span></div><div class="salary-metrics">${metrics.map(([label, value], index) => `<div class="salary-metric ${label.startsWith('Total descontado') ? 'salary-metric-total' : ''} ${index === metrics.length - 1 ? 'salary-metric-net' : ''}"><span>${label}</span><strong>${value}</strong></div>`).join('')}</div>${benefitMarkup}${contractPreview}${notes}`;
   }
 
   function profileCategoryTotalsHTML(items) {
@@ -687,13 +772,34 @@
   }));
   profileForm.addEventListener('submit', event => {
     event.preventDefault();
-    state.profile = profileFromForm(event.currentTarget);
+    const submittedProfile = profileFromForm(event.currentTarget);
+    if (contractBenefitsEligible(submittedProfile)) {
+      const checks = [
+        [submittedProfile.contractThirteenthEnabled, submittedProfile.contractThirteenthDate, submittedProfile.contractThirteenthPercent, 'contractThirteenthDate', 'contractThirteenthPercent'],
+        [submittedProfile.contractVacationEnabled, submittedProfile.contractVacationDate, submittedProfile.contractVacationPercent, 'contractVacationDate', 'contractVacationPercent']
+      ];
+      const missingPaymentDetail = checks.find(([enabled, date, percent]) => enabled && (!date || !(percent > 0)));
+      const missingBase = (submittedProfile.contractThirteenthEnabled || submittedProfile.contractVacationEnabled)
+        && submittedProfile.contractBenefitBase === 'custom' && submittedProfile.contractBenefitCustomBase <= 0;
+      if (missingPaymentDetail || missingBase) {
+        const details = document.getElementById('contract-benefits-details');
+        details.open = true;
+        const missingDate = missingPaymentDetail && !missingPaymentDetail[1];
+        const target = missingPaymentDetail
+          ? event.currentTarget.elements[missingDate ? missingPaymentDetail[3] : missingPaymentDetail[4]]
+          : event.currentTarget.elements.contractBenefitCustomBase;
+        showToast(missingPaymentDetail ? (missingDate ? 'Informe a data do pagamento previsto no contrato.' : 'Informe um percentual acima de zero.') : 'Informe o valor mensal combinado como base.');
+        target.focus();
+        return;
+      }
+    }
+    state.profile = submittedProfile;
     syncProfileIncomeSchedule(state.profile);
     save();
     renderAll();
     renderProfileEstimate(state.profile);
     const hasUpcomingProfileIncome = state.entries.some(item => item.profileGenerated && item.status !== 'received' && item.date >= dateInputValue(new Date()));
-    showToast(hasUpcomingProfileIncome ? 'Perfil salvo. Rendas previstas adicionadas ao painel.' : 'Perfil salvo. A estimativa mensal foi atualizada.');
+    showToast(hasUpcomingProfileIncome ? 'Perfil salvo. Recebimentos previstos adicionados ao painel.' : 'Perfil salvo. A estimativa mensal foi atualizada.');
   });
   document.getElementById('transaction-filter').addEventListener('change', renderTransactions);
 
