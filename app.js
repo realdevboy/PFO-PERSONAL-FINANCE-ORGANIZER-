@@ -165,13 +165,13 @@
   };
 
   let profileExpenseDraft = Array.isArray(state.profile?.expenseItems)
-    ? state.profile.expenseItems.map(item => ({ ...item, id: String(item.id || newId()), category: profileCategories.includes(item.category) ? item.category : 'Outros' }))
+    ? state.profile.expenseItems.map(item => ({ ...item, id: String(item.id || newId()), dueDay: Number(item.dueDay) || null, category: profileCategories.includes(item.category) ? item.category : 'Outros' }))
     : Object.entries(state.profile?.expenses || {}).filter(([, amount]) => Number(amount) > 0).map(([key, amount], index) => {
       const [category, description] = legacyExpenseCategories[key] || legacyExpenseCategories.other;
       return { id: `legacy-${index}`, description, amount: Number(amount), category, categorySource: 'manual' };
     });
   let profileExtraSourceDraft = Array.isArray(state.profile?.extraSources)
-    ? state.profile.extraSources.map(item => ({ ...item, id: String(item.id || newId()), kind: EXTRA_SOURCE_TYPES[item.kind] ? item.kind : 'other-income', cadence: item.cadence === 'business-day' ? 'business-day' : 'monthly' }))
+    ? state.profile.extraSources.map(item => ({ ...item, id: String(item.id || newId()), paymentDay: Number(item.paymentDay) || null, kind: EXTRA_SOURCE_TYPES[item.kind] ? item.kind : 'other-income', cadence: item.cadence === 'business-day' ? 'business-day' : 'monthly' }))
     : Number(state.profile?.grossVariableIncome) > 0
       ? [{ id: 'legacy-variable-income', kind: 'other-income', description: 'Renda extra anterior', amount: Number(state.profile.grossVariableIncome), cadence: 'monthly' }]
       : [];
@@ -510,12 +510,12 @@
   function syncProfileIncomeSchedule(profile) {
     const today = new Date();
     const todayKey = dateInputValue(today);
-    state.entries = state.entries.filter(item => !(item.profileGenerated && item.status !== 'received' && item.date >= todayKey));
+    state.entries = state.entries.filter(item => !(item.type === 'income' && item.profileGenerated && !item.profileGeneratedKind && item.status !== 'received' && item.date >= todayKey));
 
     syncContractBenefitsSchedule(profile);
-    const paymentDay = Number(profile.paymentDay);
-    const hasForecastableIncome = (Number(profile.grossFixedIncome) || 0) > 0 || (profile.extraSources || []).some(item => !(EXTRA_SOURCE_TYPES[item.kind] || EXTRA_SOURCE_TYPES['other-income']).isBenefit && (Number(item.amount) || 0) > 0);
-    if (!profile.profileIncomeEnabled || !hasForecastableIncome || paymentDay < 1 || paymentDay > 31) return;
+    const cashSources = (profile.extraSources || []).filter(item => !(EXTRA_SOURCE_TYPES[item.kind] || EXTRA_SOURCE_TYPES['other-income']).isBenefit && (Number(item.amount) || 0) > 0);
+    const fixedGross = Number(profile.grossFixedIncome) || 0;
+    if (!profile.profileIncomeEnabled || (!(fixedGross > 0) && !cashSources.length)) return;
 
     let scheduledCount = 0;
     for (let offset = 0; offset < 13 && scheduledCount < 12; offset += 1) {
@@ -523,27 +523,68 @@
       const year = today.getFullYear() + Math.floor(monthIndex / 12);
       const normalizedMonth = monthIndex % 12;
       const calculation = calculateProfileIncome(profile, { year, monthIndex: normalizedMonth });
-      if (!calculation.hasGross || calculation.needsActivity || !(calculation.monthlyNet > 0)) continue;
-      const date = paymentDateValue(year, normalizedMonth, paymentDay);
-      if (date < todayKey) continue;
-      const amount = roundMoney(calculation.monthlyNet);
-      const existingManualIncome = state.entries.some(item => !item.profileGenerated && item.type === 'income' && item.incomeType === 'fixed' && item.date === date && roundMoney(item.amount) === amount);
-      if (!existingManualIncome) {
+      if (!calculation.hasGross || calculation.needsActivity) continue;
+
+      const baseProfile = { ...profile, grossVariableIncome: 0, extraSources: [] };
+      const baseCalculation = fixedGross > 0 ? calculateProfileIncome(baseProfile, { year, monthIndex: normalizedMonth }) : null;
+      const scheduledInMonth = [];
+      if (baseCalculation?.monthlyNet > 0) scheduledInMonth.push({ description: 'Renda fixa do perfil', amount: baseCalculation.monthlyNet, paymentDay: Number(profile.paymentDay), incomeType: 'fixed' });
+
+      const includedSources = [];
+      let previousNet = Number(baseCalculation?.monthlyNet) || 0;
+      cashSources.forEach(source => {
+        includedSources.push(source);
+        const nextProfile = { ...profile, extraSources: [...includedSources] };
+        const nextCalculation = calculateProfileIncome(nextProfile, { year, monthIndex: normalizedMonth });
+        const increment = roundMoney(Math.max(0, (Number(nextCalculation.monthlyNet) || 0) - previousNet));
+        previousNet = Number(nextCalculation.monthlyNet) || 0;
+        const paymentDay = Number(source.paymentDay) || Number(profile.paymentDay);
+        if (increment > 0 && paymentDay >= 1 && paymentDay <= 31) scheduledInMonth.push({ description: source.description || 'Renda extra', amount: increment, paymentDay, incomeType: 'variable' });
+      });
+
+      scheduledInMonth.forEach((scheduled, itemIndex) => {
+        if (!Number.isFinite(scheduled.paymentDay) || scheduled.paymentDay < 1 || scheduled.paymentDay > 31) return;
+        const date = paymentDateValue(year, normalizedMonth, scheduled.paymentDay);
+        if (date < todayKey) return;
+        const amount = roundMoney(scheduled.amount);
+        const existingManualIncome = state.entries.some(item => !item.profileGenerated && item.type === 'income' && item.incomeType === scheduled.incomeType && item.date === date && roundMoney(item.amount) === amount);
+        if (existingManualIncome) return;
         state.entries.push({
-          id: newId(),
-          type: 'income',
-          description: 'Renda líquida do perfil',
-          amount,
-          date,
-          category: '',
-          incomeType: 'fixed',
-          status: 'planned',
-          profileGenerated: true,
-          createdAt: Date.now() + offset
+          id: newId(), type: 'income', description: scheduled.description, amount, date,
+          category: '', incomeType: scheduled.incomeType, status: 'planned', profileGenerated: true,
+          profileGeneratedIncome: true, createdAt: Date.now() + offset + itemIndex
+        });
+      });
+      if (scheduledInMonth.length) scheduledCount += 1;
+    }
+  }
+
+  function syncProfileExpenseSchedule(profile) {
+    const today = new Date();
+    const todayKey = dateInputValue(today);
+    state.entries = state.entries.filter(item => !(item.type === 'bill' && item.profileExpenseGenerated && item.status !== 'paid' && item.date >= todayKey));
+    (profile.expenseItems || []).forEach(expense => {
+      const dueDay = Number(expense.dueDay);
+      const amount = roundMoney(Number(expense.amount) || 0);
+      if (dueDay < 1 || dueDay > 31 || amount <= 0) return;
+      for (let offset = 0; offset < 12; offset += 1) {
+        const monthIndex = today.getMonth() + offset;
+        const year = today.getFullYear() + Math.floor(monthIndex / 12);
+        const normalizedMonth = monthIndex % 12;
+        const date = paymentDateValue(year, normalizedMonth, dueDay);
+        if (date < todayKey) continue;
+        const description = expense.description || 'Despesa fixa';
+        const manualDuplicate = state.entries.some(item => item.type === 'bill' && !item.profileExpenseGenerated && item.date === date && roundMoney(item.amount) === amount && String(item.description || '').trim().toLocaleLowerCase('pt-BR') === description.trim().toLocaleLowerCase('pt-BR'));
+        if (manualDuplicate) continue;
+        const alreadyGenerated = state.entries.some(item => item.profileExpenseGenerated && item.profileExpenseId === expense.id && item.date === date);
+        if (alreadyGenerated) continue;
+        state.entries.push({
+          id: newId(), type: 'bill', description, amount, date, category: expense.category || 'Outros',
+          incomeType: '', status: 'pending', profileGenerated: true, profileExpenseGenerated: true,
+          profileExpenseId: expense.id, createdAt: Date.now() + offset
         });
       }
-      scheduledCount += 1;
-    }
+    });
   }
 
   function renderProfileForm() {
@@ -606,6 +647,7 @@
           <label class="field">Nome para identificar (opcional)<input name="extraSourceName" data-extra-source-name="${escapeHTML(item.id)}" maxlength="50" autocomplete="off" value="${escapeHTML(item.description || '')}"></label>
           <label class="field">Valor ${unit} (R$)<input name="extraSourceAmount" data-extra-source-amount="${escapeHTML(item.id)}" type="number" min="0.01" step="0.01" inputmode="decimal" autocomplete="off" value="${Number(item.amount) || ''}"></label>
           <label class="field">Como calcular?<select name="extraSourceCadence" data-extra-source-cadence="${escapeHTML(item.id)}"><option value="monthly"${item.cadence === 'monthly' ? ' selected' : ''}>Valor mensal</option><option value="business-day"${item.cadence === 'business-day' ? ' selected' : ''}>Por dia útil</option></select></label>
+          ${source.isBenefit ? '' : `<label class="field">Dia do recebimento<input name="extraSourcePaymentDay" data-extra-source-payment-day="${escapeHTML(item.id)}" type="number" min="1" max="31" step="1" inputmode="numeric" autocomplete="off" placeholder="Dia principal" value="${Number(item.paymentDay) || ''}"><span class="field-help">Em branco: usa o dia da renda fixa.</span></label>`}
         </div>
       </article>`;
     }).join('') : '<div class="profile-list-empty">Nenhuma renda extra ou benefício adicionado.</div>';
@@ -650,7 +692,9 @@
     const incomeScheduleEnabled = form.elements.profileIncomeEnabled.checked;
     document.getElementById('profile-income-schedule-fields').hidden = !incomeScheduleEnabled;
     const calculation = calculateProfileIncome(profileFromForm(form));
-    form.elements.paymentDay.required = incomeScheduleEnabled && calculation.hasGross && !calculation.needsActivity && calculation.monthlyNet > 0;
+    const cashSources = profileExtraSourceDraft.filter(item => !(EXTRA_SOURCE_TYPES[item.kind] || EXTRA_SOURCE_TYPES['other-income']).isBenefit && (Number(item.amount) || 0) > 0);
+    const needsMainPaymentDay = Number(form.elements.grossFixedIncome.value) > 0 || cashSources.some(item => !(Number(item.paymentDay) >= 1 && Number(item.paymentDay) <= 31));
+    form.elements.paymentDay.required = incomeScheduleEnabled && calculation.hasGross && !calculation.needsActivity && calculation.monthlyNet > 0 && needsMainPaymentDay;
     const contractEligible = contractBenefitsEligible({ workRegime: regime, variableRegime });
     const contractDetails = document.getElementById('contract-benefits-details');
     contractDetails.hidden = !contractEligible;
@@ -733,13 +777,13 @@
     if (!root) return;
     root.innerHTML = profileExpenseDraft.length ? profileExpenseDraft.map(item => `
       <article class="profile-expense-row">
-        <div class="profile-expense-summary"><div class="profile-expense-description"><strong>${escapeHTML(item.description)}</strong><span>${escapeHTML(item.category || 'Outros')}</span></div>
+        <div class="profile-expense-summary"><div class="profile-expense-description"><strong>${escapeHTML(item.description)}</strong><span>${escapeHTML(item.category || 'Outros')} · ${item.dueDay ? `vence todo dia ${item.dueDay}` : 'vencimento não informado'}</span></div>
         <div class="profile-expense-value">${editingProfileExpenseId === item.id
           ? `<strong class="profile-expense-amount">${money(item.amount)}</strong>`
           : `<strong class="profile-expense-amount">${money(item.amount)}</strong><button class="small-action" type="button" data-edit-profile-expense="${escapeHTML(item.id)}" aria-label="Editar ${escapeHTML(item.description)}">Editar</button>`}</div>
         <button class="small-action delete" type="button" data-remove-profile-expense="${escapeHTML(item.id)}" aria-label="Remover despesa ${escapeHTML(item.description)}">Remover</button>
         </div>
-        ${editingProfileExpenseId === item.id ? `<div class="profile-expense-edit"><label class="field" for="profile-expense-edit-${escapeHTML(item.id)}">Novo valor mensal (R$)<input name="profileExpenseEditAmount" class="profile-expense-value-input" id="profile-expense-edit-${escapeHTML(item.id)}" data-profile-expense-value="${escapeHTML(item.id)}" type="number" min="0.01" step="0.01" inputmode="decimal" autocomplete="off" value="${Number(item.amount)}"></label><label class="field">Categoria<select name="profileExpenseCategory" data-profile-category="${escapeHTML(item.id)}" aria-label="Categoria para ${escapeHTML(item.description)}">${profileCategories.map(category => `<option${item.category === category ? ' selected' : ''}>${category}</option>`).join('')}</select></label><div class="profile-expense-edit-actions"><button class="small-action" type="button" data-save-profile-expense="${escapeHTML(item.id)}">Salvar</button><button class="small-action" type="button" data-cancel-profile-expense="${escapeHTML(item.id)}">Cancelar</button></div></div>` : ''}
+        ${editingProfileExpenseId === item.id ? `<div class="profile-expense-edit"><label class="field" for="profile-expense-edit-${escapeHTML(item.id)}">Novo valor mensal (R$)<input name="profileExpenseEditAmount" class="profile-expense-value-input" id="profile-expense-edit-${escapeHTML(item.id)}" data-profile-expense-value="${escapeHTML(item.id)}" type="number" min="0.01" step="0.01" inputmode="decimal" autocomplete="off" value="${Number(item.amount)}"></label><label class="field">Categoria<select name="profileExpenseCategory" data-profile-category="${escapeHTML(item.id)}" aria-label="Categoria para ${escapeHTML(item.description)}">${profileCategories.map(category => `<option${item.category === category ? ' selected' : ''}>${category}</option>`).join('')}</select></label><label class="field">Dia do vencimento<input name="profileExpenseDueDayEdit" data-profile-expense-due-day="${escapeHTML(item.id)}" type="number" min="1" max="31" step="1" inputmode="numeric" placeholder="Ex.: 10" value="${Number(item.dueDay) || ''}"><span class="field-help">Sem dia, não há previsão automática.</span></label><div class="profile-expense-edit-actions"><button class="small-action" type="button" data-save-profile-expense="${escapeHTML(item.id)}">Salvar</button><button class="small-action" type="button" data-cancel-profile-expense="${escapeHTML(item.id)}">Cancelar</button></div></div>` : ''}
       </article>`).join('') : '<div class="profile-list-empty">Você ainda não adicionou despesas.</div>';
   }
 
@@ -871,6 +915,11 @@
   extraSourceCadence.addEventListener('change', () => {
     document.getElementById('extra-source-amount-label').firstChild.textContent = extraSourceCadence.value === 'business-day' ? 'Quanto recebe por dia útil? (R$)' : 'Quanto recebe por mês? (R$)';
   });
+  document.getElementById('extra-source-kind').addEventListener('change', event => {
+    const isBenefit = (EXTRA_SOURCE_TYPES[event.currentTarget.value] || EXTRA_SOURCE_TYPES['other-income']).isBenefit;
+    document.getElementById('extra-source-payment-day-field').hidden = isBenefit;
+    if (isBenefit) document.getElementById('extra-source-payment-day').value = '';
+  });
   document.getElementById('extra-source-amount').addEventListener('input', event => {
     if (Number(event.currentTarget.value) > 0) document.getElementById('extra-source-error').hidden = true;
   });
@@ -888,10 +937,12 @@
     profileExtraSourceDraft.push({
       id: newId(), kind,
       description: document.getElementById('extra-source-name').value.trim() || sourceType.label,
-      amount, cadence: extraSourceCadence.value
+      amount, cadence: extraSourceCadence.value,
+      paymentDay: Number(document.getElementById('extra-source-payment-day').value) || null
     });
     amountInput.value = '';
     document.getElementById('extra-source-name').value = '';
+    document.getElementById('extra-source-payment-day').value = '';
     renderProfileExtraSourceList();
     updateProfileRegimeFields();
     renderProfileEstimate(profileFromForm(profileForm));
@@ -914,11 +965,14 @@
   });
   extraSourceList.addEventListener('change', event => {
     const cadenceSelect = event.target.closest('[data-extra-source-cadence]');
-    if (!cadenceSelect) return;
-    const source = profileExtraSourceDraft.find(item => item.id === cadenceSelect.dataset.extraSourceCadence);
+    const paymentDayInput = event.target.closest('[data-extra-source-payment-day]');
+    if (!cadenceSelect && !paymentDayInput) return;
+    const sourceId = cadenceSelect?.dataset.extraSourceCadence || paymentDayInput.dataset.extraSourcePaymentDay;
+    const source = profileExtraSourceDraft.find(item => item.id === sourceId);
     if (!source) return;
-    source.cadence = cadenceSelect.value;
-    renderProfileExtraSourceList();
+    if (cadenceSelect) source.cadence = cadenceSelect.value;
+    if (paymentDayInput) source.paymentDay = Number(paymentDayInput.value) || null;
+    if (cadenceSelect) renderProfileExtraSourceList();
     updateProfileRegimeFields();
     renderProfileEstimate(profileFromForm(profileForm));
   });
@@ -942,7 +996,7 @@
     updateProfileRegimeFields();
     renderProfileEstimate(profileFromForm(profileForm));
   });
-  [document.getElementById('extra-source-name'), document.getElementById('extra-source-amount')].forEach(input => input.addEventListener('keydown', event => {
+  [document.getElementById('extra-source-name'), document.getElementById('extra-source-amount'), document.getElementById('extra-source-payment-day')].forEach(input => input.addEventListener('keydown', event => {
     if (event.key === 'Enter') {
       event.preventDefault();
       document.getElementById('add-extra-source').click();
@@ -951,21 +1005,24 @@
   document.getElementById('add-profile-expense').addEventListener('click', () => {
     const description = document.getElementById('profile-expense-description');
     const amount = document.getElementById('profile-expense-amount');
+    const dueDayInput = document.getElementById('profile-expense-due-day');
     const cleanDescription = description.value.trim();
     const numericAmount = Number(amount.value);
-    if (!cleanDescription || !numericAmount || numericAmount < 0) {
-      showToast('Informe a descrição e o valor mensal da despesa.');
-      (!cleanDescription ? description : amount).focus();
+    const dueDay = Number(dueDayInput.value);
+    if (!cleanDescription || !numericAmount || numericAmount < 0 || !Number.isInteger(dueDay) || dueDay < 1 || dueDay > 31) {
+      showToast('Informe o nome, valor e dia de vencimento da despesa.');
+      (!cleanDescription ? description : !numericAmount || numericAmount < 0 ? amount : dueDayInput).focus();
       return;
     }
-    profileExpenseDraft.push({ id: newId(), description: cleanDescription, amount: numericAmount, category: classifyProfileExpense(cleanDescription), categorySource: 'auto' });
+    profileExpenseDraft.push({ id: newId(), description: cleanDescription, amount: numericAmount, dueDay, category: classifyProfileExpense(cleanDescription), categorySource: 'auto' });
     description.value = '';
     amount.value = '';
+    dueDayInput.value = '';
     renderProfileExpenseList();
     renderProfileEstimate(profileFromForm(profileForm));
     description.focus();
   });
-  [document.getElementById('profile-expense-description'), document.getElementById('profile-expense-amount')].forEach(input => input.addEventListener('keydown', event => {
+  [document.getElementById('profile-expense-description'), document.getElementById('profile-expense-amount'), document.getElementById('profile-expense-due-day')].forEach(input => input.addEventListener('keydown', event => {
     if (event.key === 'Enter') {
       event.preventDefault();
       document.getElementById('add-profile-expense').click();
@@ -1007,11 +1064,12 @@
     }
     state.profile = submittedProfile;
     syncProfileIncomeSchedule(state.profile);
+    syncProfileExpenseSchedule(state.profile);
     save();
     renderAll();
     renderProfileEstimate(state.profile);
-    const hasUpcomingProfileIncome = state.entries.some(item => item.profileGenerated && item.status !== 'received' && item.date >= dateInputValue(new Date()));
-    showToast(hasUpcomingProfileIncome ? 'Perfil salvo. Recebimentos previstos adicionados ao painel.' : 'Perfil salvo. A estimativa mensal foi atualizada.');
+    const hasUpcomingProfileForecast = state.entries.some(item => item.profileGenerated && item.status !== 'received' && item.status !== 'paid' && item.date >= dateInputValue(new Date()));
+    showToast(hasUpcomingProfileForecast ? 'Perfil salvo. Previsões de recebimentos e contas atualizadas no painel.' : 'Perfil salvo. A estimativa mensal foi atualizada.');
   });
   document.getElementById('transaction-filter').addEventListener('change', renderTransactions);
 
@@ -1099,14 +1157,23 @@
     if (saveProfileExpense) {
       const expenseId = saveProfileExpense.dataset.saveProfileExpense;
       const amountInput = document.querySelector(`[data-profile-expense-value="${CSS.escape(expenseId)}"]`);
+      const dueDayInput = document.querySelector(`[data-profile-expense-due-day="${CSS.escape(expenseId)}"]`);
       const amount = Number(amountInput?.value);
+      const dueDayValue = dueDayInput?.value.trim() || '';
+      const dueDay = dueDayValue ? Number(dueDayValue) : null;
       const item = profileExpenseDraft.find(expense => expense.id === expenseId);
       if (!item || !Number.isFinite(amount) || amount <= 0) {
         showToast('Informe um valor maior que zero.');
         amountInput?.focus();
         return;
       }
+      if (dueDayValue && (!Number.isInteger(dueDay) || dueDay < 1 || dueDay > 31)) {
+        showToast('Informe um dia de vencimento entre 1 e 31.');
+        dueDayInput?.focus();
+        return;
+      }
       item.amount = amount;
+      item.dueDay = dueDay;
       editingProfileExpenseId = null;
       renderProfileExpenseList();
       renderProfileEstimate(profileFromForm(profileForm));
@@ -1183,7 +1250,7 @@
     if (!item) return;
     item.category = categorySelect.value;
     item.categorySource = 'manual';
-    renderProfileExpenseList();
+    categorySelect.closest('.profile-expense-edit').closest('.profile-expense-row').querySelector('.profile-expense-description span').textContent = `${item.category} · ${item.dueDay ? `vence todo dia ${item.dueDay}` : 'vencimento não informado'}`;
     renderProfileEstimate(profileFromForm(profileForm));
   });
 

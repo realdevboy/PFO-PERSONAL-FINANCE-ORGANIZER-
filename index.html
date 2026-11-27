@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#f5f7f4">
   <meta name="description" content="Organize rendas fixas e variáveis, contas, gastos e metas em um só lugar.">
   <title>PFO — organização financeira</title>
-  <link rel="stylesheet" href="styles.css?v=profile-vacation-days-2026-11-27">
-  <script src="app.js?v=profile-vacation-days-2026-11-27" defer></script>
+  <link rel="stylesheet" href="styles.css?v=profile-payment-dates-2026-11-27">
+  <script src="app.js?v=profile-payment-dates-2026-11-27" defer></script>
 </head>
 <body>
   <a class="skip-link" id="skip-link" href="#page-title">Ir para o conteúdo</a>
@@ -110,10 +110,11 @@
                   <label class="field">Nome para identificar (opcional)<input id="extra-source-name" name="extraSourceNameDraft" maxlength="50" autocomplete="off" placeholder="Ex.: Cliente A"></label>
                   <label class="field" id="extra-source-amount-label">Quanto recebe por mês? (R$)<input id="extra-source-amount" name="extraSourceAmountDraft" type="number" min="0.01" step="0.01" inputmode="decimal" autocomplete="off" placeholder="Ex.: 500"></label>
                   <label class="field">Como calcular?<select id="extra-source-cadence" name="extraSourceCadenceDraft"><option value="monthly">Valor fechado por mês</option><option value="business-day">Valor por dia útil</option></select></label>
+                  <label class="field" id="extra-source-payment-day-field">Em qual dia recebe? (opcional)<input id="extra-source-payment-day" name="extraSourcePaymentDayDraft" type="number" min="1" max="31" step="1" inputmode="numeric" autocomplete="off" placeholder="Usar dia da renda principal"><span class="field-help">Para renda em dinheiro, informe outra data ou use o dia principal.</span></label>
                   <button class="button button-secondary" id="add-extra-source" type="button">Adicionar</button>
                 </div>
                 <p class="form-error" id="extra-source-error" role="alert" hidden>Informe um valor maior que zero.</p>
-                <p class="field-help profile-extra-income-note">Valores por dia útil variam conforme o mês e as férias informadas. Benefícios ficam separados do dinheiro disponível; feriados não são descontados.</p>
+                <p class="field-help profile-extra-income-note">Valores por dia útil variam conforme o mês e as férias informadas. As rendas em dinheiro podem ter um dia de recebimento próprio; benefícios ficam fora do saldo.</p>
               </details>
               <div id="profile-extra-income-list" class="profile-extra-income-list" aria-live="polite"></div>
             </div>
@@ -129,8 +130,8 @@
             <div class="profile-income-schedule" id="profile-income-schedule">
               <label class="checkbox-field"><input name="profileIncomeEnabled" type="checkbox" checked>Prever minha renda após descontos no painel</label>
               <div class="profile-income-schedule-fields" id="profile-income-schedule-fields">
-                <label class="field">Em qual dia do mês costuma receber?<input name="paymentDay" type="number" min="1" max="31" step="1" inputmode="numeric" autocomplete="off" placeholder="Ex.: 5"><span class="field-help">Se variar, informe o dia mais comum.</span></label>
-                <p class="field-help profile-income-schedule-note">Ela aparece como prevista e só entra no saldo quando você marcar que recebeu.</p>
+                <label class="field">Qual é seu dia principal de recebimento?<input name="paymentDay" type="number" min="1" max="31" step="1" inputmode="numeric" autocomplete="off" placeholder="Ex.: 5"><span class="field-help">Use como padrão. Você pode informar outro dia em cada renda extra.</span></label>
+                <p class="field-help profile-income-schedule-note">O PFO prevê cada recebimento na data informada. Ele só entra no saldo quando você marcar que recebeu.</p>
               </div>
             </div>
             <details class="profile-calculation-details" id="income-calculation-details">
@@ -173,16 +174,17 @@
             <div id="salary-calculation" class="salary-calculation" aria-live="polite"></div>
           </section>
           <section class="profile-section" aria-labelledby="profile-expenses-title">
-            <div class="profile-section-heading"><div><h2 id="profile-expenses-title">Seus gastos mensais</h2><p class="panel-subtitle">Adicione os gastos que se repetem ou que quer considerar no seu planejamento.</p></div></div>
+            <div class="profile-section-heading"><div><h2 id="profile-expenses-title">Suas despesas fixas</h2><p class="panel-subtitle">Adicione cada conta recorrente e informe o dia do vencimento para o PFO prevê-la no painel.</p></div></div>
             <div class="profile-expense-entry">
               <label class="field">Nome do gasto<input id="profile-expense-description" name="profileExpenseDescription" maxlength="70" autocomplete="off" placeholder="Ex.: aluguel, mercado"></label>
               <label class="field">Quanto custa por mês? (R$)<input id="profile-expense-amount" name="profileExpenseAmount" type="number" min="0.01" step="0.01" inputmode="decimal" autocomplete="off" placeholder="Ex.: 1.300"></label>
+              <label class="field">Dia do vencimento<input id="profile-expense-due-day" name="profileExpenseDueDay" type="number" min="1" max="31" step="1" inputmode="numeric" autocomplete="off" placeholder="Ex.: 10"></label>
               <button class="button button-secondary" id="add-profile-expense" type="button">＋ Adicionar gasto</button>
             </div>
-            <p class="profile-classifier-note">O PFO sugere uma categoria pelo nome do gasto. Você pode conferir e mudar a categoria depois.</p>
+            <p class="profile-classifier-note">O PFO sugere uma categoria pelo nome. No dia informado, a conta aparece em “Contas” como prevista; em meses mais curtos, usa o último dia do mês. Ao editar despesas antigas, informe também o vencimento para criar previsões.</p>
             <div id="profile-expense-list" class="profile-expense-list" aria-live="polite"></div>
             <div class="profile-category-summary-wrap"><h3>Quanto vai para cada categoria?</h3><div id="profile-expense-summary" class="profile-category-summary"></div></div>
-            <p class="form-note profile-note">Esta lista é uma referência mensal do perfil. Para acompanhar o saldo real, registre cada pagamento em Movimentações ou Contas; os mesmos valores não são somados novamente ao saldo.</p>
+            <p class="form-note profile-note">As despesas com vencimento informado aparecem em “Contas” como previstas. Ao marcar uma conta como paga, ela passa a compor os gastos realizados no painel.</p>
           </section>
           <section class="profile-section profile-estimate-section" aria-labelledby="profile-estimate-title">
             <div class="profile-section-heading"><div><h2 id="profile-estimate-title">Resumo do mês</h2><p class="panel-subtitle">Veja a renda que sobra depois dos gastos. Benefícios aparecem à parte.</p></div></div>

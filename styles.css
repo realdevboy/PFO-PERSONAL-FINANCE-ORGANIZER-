@@ -178,7 +178,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .profile-extra-source-monthly { display: flex; flex-direction: column; gap: 4px; align-self: center; }
 .profile-extra-source-monthly strong { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .profile-extra-source-actions { display: flex; align-items: center; gap: 4px; }
-.profile-extra-source-edit { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 13px; padding: 13px; border-radius: 9px; background: var(--bg); }
+.profile-extra-source-edit { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 13px; padding: 13px; border-radius: 9px; background: var(--bg); }
 .profile-extra-source-edit[hidden] { display: none; }
 .form-error { margin: 8px 0 0; color: var(--danger); font-size: 13px; font-weight: 600; }
 .profile-calculation-details { max-width: 690px; margin-top: 14px; }
@@ -224,7 +224,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .salary-reserve { margin-top: 16px; }
 .salary-note { margin: 12px 0 0; line-height: 1.5; }
 .salary-empty { padding: 12px 0 2px; color: var(--muted); font-size: 13px; }
-.profile-expense-entry { display: grid; grid-template-columns: minmax(0, 1fr) minmax(145px, .55fr) auto; align-items: end; gap: 12px; max-width: 810px; }
+.profile-expense-entry { display: grid; grid-template-columns: minmax(0, 1fr) minmax(145px, .55fr) minmax(110px, .35fr) auto; align-items: end; gap: 12px; max-width: 1000px; }
 .profile-expense-entry .button { white-space: nowrap; }
 .profile-classifier-note { margin: 9px 0 13px; color: var(--muted); font-size: 12px; }
 .profile-expense-list { max-width: 810px; }
@@ -237,7 +237,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .profile-expense-value { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 3px 7px; }
 .profile-expense-value-input { width: 115px; min-height: 38px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); font: inherit; font-size: 14px; }
 .profile-expense-value-input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
-.profile-expense-edit { display: grid; grid-template-columns: minmax(150px, .7fr) minmax(180px, 1fr) auto; align-items: end; gap: 10px; margin-top: 10px; padding: 12px; border-radius: 9px; background: var(--bg); }
+.profile-expense-edit { display: grid; grid-template-columns: minmax(130px, .7fr) minmax(160px, 1fr) minmax(110px, .5fr) auto; align-items: end; gap: 10px; margin-top: 10px; padding: 12px; border-radius: 9px; background: var(--bg); }
 .profile-expense-edit .field { gap: 4px; font-size: 12px; }
 .profile-expense-edit select { width: 100%; min-height: 40px; padding: 0 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font-size: 13px; }
 .profile-expense-edit-actions { display: flex; align-items: center; gap: 4px; }
