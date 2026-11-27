@@ -126,6 +126,7 @@
       const [category, description] = legacyExpenseCategories[key] || legacyExpenseCategories.other;
       return { id: `legacy-${index}`, description, amount: Number(amount), category, categorySource: 'manual' };
     });
+  let editingProfileExpenseId = null;
   state.profile = { ...(state.profile || {}), expenseItems: profileExpenseDraft };
   delete state.profile.expenses;
 
@@ -214,7 +215,9 @@
     root.innerHTML = profileExpenseDraft.length ? profileExpenseDraft.map(item => `
       <article class="profile-expense-row">
         <div class="profile-expense-description"><strong>${escapeHTML(item.description)}</strong><span>${item.categorySource === 'auto' ? 'Categoria identificada pela descrição' : 'Categoria'}</span></div>
-        <strong class="profile-expense-amount">${money(item.amount)}</strong>
+        <div class="profile-expense-value">${editingProfileExpenseId === item.id
+          ? `<label class="sr-only" for="profile-expense-edit-${escapeHTML(item.id)}">Novo valor para ${escapeHTML(item.description)}</label><input class="profile-expense-value-input" id="profile-expense-edit-${escapeHTML(item.id)}" data-profile-expense-value="${escapeHTML(item.id)}" type="number" min="0.01" step="0.01" inputmode="decimal" value="${Number(item.amount)}"><button class="small-action" type="button" data-save-profile-expense="${escapeHTML(item.id)}">Salvar</button><button class="small-action" type="button" data-cancel-profile-expense="${escapeHTML(item.id)}">Cancelar</button>`
+          : `<strong class="profile-expense-amount">${money(item.amount)}</strong><button class="small-action" type="button" data-edit-profile-expense="${escapeHTML(item.id)}" aria-label="Editar valor de ${escapeHTML(item.description)}">Editar valor</button>`}</div>
         <label class="profile-expense-category"><span class="sr-only">Categoria para ${escapeHTML(item.description)}</span><select data-profile-category="${escapeHTML(item.id)}" aria-label="Categoria para ${escapeHTML(item.description)}">${profileCategories.map(category => `<option${item.category === category ? ' selected' : ''}>${category}</option>`).join('')}</select></label>
         <button class="small-action delete" type="button" data-remove-profile-expense="${escapeHTML(item.id)}" aria-label="Remover despesa ${escapeHTML(item.description)}">Remover</button>
       </article>`).join('') : '<div class="profile-list-empty">Você ainda não adicionou despesas.</div>';
@@ -438,9 +441,38 @@
   });
 
   document.body.addEventListener('click', event => {
+    const editProfileExpense = event.target.closest('[data-edit-profile-expense]');
+    if (editProfileExpense) {
+      editingProfileExpenseId = editProfileExpense.dataset.editProfileExpense;
+      renderProfileExpenseList();
+      document.getElementById(`profile-expense-edit-${editingProfileExpenseId}`)?.focus();
+    }
+    const saveProfileExpense = event.target.closest('[data-save-profile-expense]');
+    if (saveProfileExpense) {
+      const expenseId = saveProfileExpense.dataset.saveProfileExpense;
+      const amountInput = document.querySelector(`[data-profile-expense-value="${CSS.escape(expenseId)}"]`);
+      const amount = Number(amountInput?.value);
+      const item = profileExpenseDraft.find(expense => expense.id === expenseId);
+      if (!item || !Number.isFinite(amount) || amount <= 0) {
+        showToast('Informe um valor maior que zero.');
+        amountInput?.focus();
+        return;
+      }
+      item.amount = amount;
+      editingProfileExpenseId = null;
+      renderProfileExpenseList();
+      renderProfileEstimate(profileFromForm(profileForm));
+      showToast('Valor atualizado. Salve o perfil para manter a alteração.');
+    }
+    const cancelProfileExpense = event.target.closest('[data-cancel-profile-expense]');
+    if (cancelProfileExpense) {
+      editingProfileExpenseId = null;
+      renderProfileExpenseList();
+    }
     const removeProfileExpense = event.target.closest('[data-remove-profile-expense]');
     if (removeProfileExpense) {
       profileExpenseDraft = profileExpenseDraft.filter(item => item.id !== removeProfileExpense.dataset.removeProfileExpense);
+      if (editingProfileExpenseId === removeProfileExpense.dataset.removeProfileExpense) editingProfileExpenseId = null;
       renderProfileExpenseList();
       renderProfileEstimate(profileFromForm(profileForm));
     }
@@ -479,6 +511,17 @@
         document.getElementById('contribution-dialog').showModal();
         form.elements.amount.focus();
       }
+    }
+  });
+
+  document.body.addEventListener('keydown', event => {
+    const input = event.target.closest('[data-profile-expense-value]');
+    if (!input) return;
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      document.querySelector(`[data-save-profile-expense="${CSS.escape(input.dataset.profileExpenseValue)}"]`)?.click();
+    } else if (event.key === 'Escape') {
+      document.querySelector(`[data-cancel-profile-expense="${CSS.escape(input.dataset.profileExpenseValue)}"]`)?.click();
     }
   });
 
