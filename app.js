@@ -9,7 +9,6 @@
     'other-income': { label: 'Outra renda em dinheiro', isBenefit: false },
     'other-benefit': { label: 'Outro benefício', isBenefit: true }
   };
-  const AVERAGE_BUSINESS_DAYS = 22;
   const today = new Date();
   let selectedMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   let toastTimer;
@@ -251,16 +250,42 @@
     return { inss, icms, iss, total: roundMoney(inss + icms + iss) };
   }
 
-  function extraSourceMonthlyAmount(item) {
-    const amount = Math.max(0, Number(item.amount) || 0);
-    return roundMoney(item.cadence === 'business-day' ? amount * AVERAGE_BUSINESS_DAYS : amount);
+  function businessDaysInRange(start, end) {
+    let count = 0;
+    for (const cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate()); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
+      if (cursor.getDay() !== 0 && cursor.getDay() !== 6) count += 1;
+    }
+    return count;
   }
 
-  function profileExtraSourceTotals(profile) {
+  function businessDaysForProfileMonth(profile, period = { year: selectedMonth.getFullYear(), monthIndex: selectedMonth.getMonth() }) {
+    const year = Number(period.year);
+    const monthIndex = Number(period.monthIndex);
+    const monthStart = new Date(year, monthIndex, 1);
+    const monthEnd = new Date(year, monthIndex + 1, 0);
+    let days = businessDaysInRange(monthStart, monthEnd);
+    const vacationStart = profile.vacationStartDate;
+    const vacationEnd = profile.vacationEndDate;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(vacationStart || '') || !/^\d{4}-\d{2}-\d{2}$/.test(vacationEnd || '') || vacationStart > vacationEnd) return days;
+    const start = new Date(`${vacationStart}T00:00:00`);
+    const end = new Date(`${vacationEnd}T00:00:00`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return days;
+    const overlapStart = start > monthStart ? start : monthStart;
+    const overlapEnd = end < monthEnd ? end : monthEnd;
+    if (overlapStart <= overlapEnd) days = Math.max(0, days - businessDaysInRange(overlapStart, overlapEnd));
+    return days;
+  }
+
+  function extraSourceMonthlyAmount(item, profile = {}, period) {
+    const amount = Math.max(0, Number(item.amount) || 0);
+    return roundMoney(item.cadence === 'business-day' ? amount * businessDaysForProfileMonth(profile, period) : amount);
+  }
+
+  function profileExtraSourceTotals(profile, period) {
     const sources = Array.isArray(profile.extraSources) ? profile.extraSources : [];
     return sources.reduce((totals, item) => {
       const sourceType = EXTRA_SOURCE_TYPES[item.kind] || EXTRA_SOURCE_TYPES['other-income'];
-      const monthlyAmount = extraSourceMonthlyAmount(item);
+      const monthlyAmount = extraSourceMonthlyAmount(item, profile, period);
       if (sourceType.isBenefit) totals.benefits += monthlyAmount;
       else totals.cashIncome += monthlyAmount;
       return totals;
@@ -272,9 +297,9 @@
     return profile.workRegime === 'mixed' && ['self-employed', 'mei'].includes(profile.variableRegime);
   }
 
-  function calculateProfileIncome(profile) {
+  function calculateProfileIncome(profile, period) {
     const fixed = Math.max(0, Number(profile.grossFixedIncome) || 0);
-    const extraSources = profileExtraSourceTotals(profile);
+    const extraSources = profileExtraSourceTotals(profile, period);
     const variable = Math.max(0, Number(Array.isArray(profile.extraSources) ? extraSources.cashIncome : profile.grossVariableIncome) || 0);
     const gross = fixed + variable;
     const dependents = Number(profile.dependents) || 0;
@@ -404,7 +429,7 @@
     const incomeLabel = totals.calculation.hasGross ? 'Renda após descontos' : totals.calculation.legacyNet > 0 ? 'Renda líquida anterior' : 'Renda estimada';
     const incomeValue = totals.calculation.needsActivity ? 'Selecione a atividade' : money(totals.monthlyIncome);
     const marginValue = totals.calculation.needsActivity ? 'Aguardando dados' : money(totals.estimatedMargin);
-    return `<div class="profile-metric"><span>${incomeLabel}</span><strong>${incomeValue}</strong></div><div class="profile-metric"><span>Benefícios estimados · fora do saldo</span><strong>${money(totals.calculation.benefitsMonthly)}</strong></div><div class="profile-metric"><span>Gastos pessoais</span><strong>${money(totals.monthlyExpenses)}</strong></div><div class="profile-metric ${!totals.calculation.needsActivity && totals.estimatedMargin < 0 ? 'profile-metric-negative' : ''}"><span>${marginLabel}</span><strong>${marginValue}</strong></div>${compact ? '' : `<p class="profile-calculation-note">${escapeHTML(profile.name ? `${profile.name}, esta é uma estimativa baseada nos valores informados.` : 'Estimativa baseada nos valores informados.')}</p>`}`;
+    return `<div class="profile-metric"><span>${incomeLabel}</span><strong>${incomeValue}</strong></div><div class="profile-metric"><span>Benefícios neste mês · fora do saldo</span><strong>${money(totals.calculation.benefitsMonthly)}</strong></div><div class="profile-metric"><span>Gastos pessoais</span><strong>${money(totals.monthlyExpenses)}</strong></div><div class="profile-metric ${!totals.calculation.needsActivity && totals.estimatedMargin < 0 ? 'profile-metric-negative' : ''}"><span>${marginLabel}</span><strong>${marginValue}</strong></div>${compact ? '' : `<p class="profile-calculation-note">${escapeHTML(profile.name ? `${profile.name}, esta é uma estimativa baseada nos valores informados.` : 'Estimativa baseada nos valores informados.')}</p>`}`;
   }
 
   function renderProfileOverview() {
@@ -421,7 +446,9 @@
     const data = new FormData(form);
     const grossFixedIncome = Number(data.get('grossFixedIncome')) || 0;
     const extraSources = profileExtraSourceDraft.map(item => ({ ...item }));
-    const grossVariableIncome = profileExtraSourceTotals({ extraSources }).cashIncome;
+    const vacationStartDate = String(data.get('vacationStartDate') || '');
+    const vacationEndDate = String(data.get('vacationEndDate') || '');
+    const grossVariableIncome = profileExtraSourceTotals({ extraSources, vacationStartDate, vacationEndDate }).cashIncome;
     return {
       saved: true,
       name: String(data.get('name') || '').trim(),
@@ -429,6 +456,8 @@
       grossFixedIncome,
       grossVariableIncome,
       extraSources,
+      vacationStartDate,
+      vacationEndDate,
       profileIncomeEnabled: data.get('profileIncomeEnabled') === 'on',
       paymentDay: Number(data.get('paymentDay')) || null,
       contractBenefitBase: String(data.get('contractBenefitBase') || 'gross'),
@@ -483,16 +512,18 @@
     const todayKey = dateInputValue(today);
     state.entries = state.entries.filter(item => !(item.profileGenerated && item.status !== 'received' && item.date >= todayKey));
 
-    const calculation = calculateProfileIncome(profile);
     syncContractBenefitsSchedule(profile);
     const paymentDay = Number(profile.paymentDay);
-    if (!profile.profileIncomeEnabled || !calculation.hasGross || calculation.needsActivity || !(calculation.monthlyNet > 0) || paymentDay < 1 || paymentDay > 31) return;
+    const hasForecastableIncome = (Number(profile.grossFixedIncome) || 0) > 0 || (profile.extraSources || []).some(item => !(EXTRA_SOURCE_TYPES[item.kind] || EXTRA_SOURCE_TYPES['other-income']).isBenefit && (Number(item.amount) || 0) > 0);
+    if (!profile.profileIncomeEnabled || !hasForecastableIncome || paymentDay < 1 || paymentDay > 31) return;
 
     let scheduledCount = 0;
     for (let offset = 0; offset < 13 && scheduledCount < 12; offset += 1) {
       const monthIndex = today.getMonth() + offset;
       const year = today.getFullYear() + Math.floor(monthIndex / 12);
       const normalizedMonth = monthIndex % 12;
+      const calculation = calculateProfileIncome(profile, { year, monthIndex: normalizedMonth });
+      if (!calculation.hasGross || calculation.needsActivity || !(calculation.monthlyNet > 0)) continue;
       const date = paymentDateValue(year, normalizedMonth, paymentDay);
       if (date < todayKey) continue;
       const amount = roundMoney(calculation.monthlyNet);
@@ -521,6 +552,9 @@
     form.elements.name.value = profile.name || '';
     form.elements.workRegime.value = profile.workRegime || 'clt';
     form.elements.grossFixedIncome.value = profile.grossFixedIncome ?? '';
+    form.elements.vacationStartDate.value = profile.vacationStartDate || '';
+    form.elements.vacationEndDate.value = profile.vacationEndDate || '';
+    document.getElementById('profile-vacation-details').open = Boolean(profile.vacationStartDate || profile.vacationEndDate);
     form.elements.profileIncomeEnabled.checked = profile.profileIncomeEnabled ?? true;
     form.elements.paymentDay.value = profile.paymentDay ?? '';
     form.elements.contractBenefitBase.value = profile.contractBenefitBase || 'gross';
@@ -561,11 +595,12 @@
     if (!root) return;
     root.innerHTML = profileExtraSourceDraft.length ? profileExtraSourceDraft.map(item => {
       const source = EXTRA_SOURCE_TYPES[item.kind] || EXTRA_SOURCE_TYPES['other-income'];
-      const monthlyAmount = extraSourceMonthlyAmount(item);
+      const currentProfile = profileFromForm(document.getElementById('profile-form'));
+      const monthlyAmount = extraSourceMonthlyAmount(item, currentProfile);
       const unit = item.cadence === 'business-day' ? 'por dia útil' : 'por mês';
       const isEditing = editingProfileExtraSourceId === item.id;
       return `<article class="profile-extra-source-row">
-        <div class="profile-extra-source-summary"><div class="profile-extra-source-title"><strong>${escapeHTML(item.description || source.label)}</strong><span>${source.label} · ${source.isBenefit ? 'benefício' : 'dinheiro'}</span></div><div class="profile-extra-source-monthly"><span>Estimativa mensal</span><strong>${money(monthlyAmount)}</strong></div>
+        <div class="profile-extra-source-summary"><div class="profile-extra-source-title"><strong>${escapeHTML(item.description || source.label)}</strong><span>${source.label} · ${source.isBenefit ? 'benefício' : 'dinheiro'}</span></div><div class="profile-extra-source-monthly"><span>${item.cadence === 'business-day' ? `Estimativa · ${businessDaysForProfileMonth(currentProfile)} dias úteis` : 'Valor por mês'}</span><strong>${money(monthlyAmount)}</strong></div>
           <div class="profile-extra-source-actions"><button class="small-action" type="button" data-edit-extra-source="${escapeHTML(item.id)}" aria-expanded="${isEditing}" aria-controls="extra-source-edit-${escapeHTML(item.id)}">${isEditing ? 'Fechar edição' : 'Editar'}</button><button class="small-action delete" type="button" data-remove-extra-source="${escapeHTML(item.id)}" aria-label="Remover ${escapeHTML(item.description || source.label)}">Remover</button></div></div>
         <div class="profile-extra-source-edit" id="extra-source-edit-${escapeHTML(item.id)}"${isEditing ? '' : ' hidden'}>
           <label class="field">Nome para identificar (opcional)<input name="extraSourceName" data-extra-source-name="${escapeHTML(item.id)}" maxlength="50" autocomplete="off" value="${escapeHTML(item.description || '')}"></label>
@@ -574,6 +609,18 @@
         </div>
       </article>`;
     }).join('') : '<div class="profile-list-empty">Nenhuma renda extra ou benefício adicionado.</div>';
+  }
+
+  function updateProfileExtraSourceSummaries() {
+    const form = document.getElementById('profile-form');
+    const currentProfile = profileFromForm(form);
+    profileExtraSourceDraft.forEach(item => {
+      const row = document.querySelector(`[data-extra-source-amount="${CSS.escape(item.id)}"]`)?.closest('.profile-extra-source-row');
+      if (!row) return;
+      const summary = row.querySelector('.profile-extra-source-monthly');
+      summary.querySelector('strong').textContent = money(extraSourceMonthlyAmount(item, currentProfile));
+      summary.querySelector('span').textContent = item.cadence === 'business-day' ? `Estimativa · ${businessDaysForProfileMonth(currentProfile)} dias úteis` : 'Valor por mês';
+    });
   }
 
   function updateProfileRegimeFields() {
@@ -809,10 +856,15 @@
   const profileForm = document.getElementById('profile-form');
   profileForm.addEventListener('input', () => {
     updateProfileRegimeFields();
+    updateProfileExtraSourceSummaries();
+    const vacationStart = profileForm.elements.vacationStartDate.value;
+    const vacationEnd = profileForm.elements.vacationEndDate.value;
+    if ((!vacationStart && !vacationEnd) || (vacationStart && vacationEnd && vacationStart <= vacationEnd)) document.getElementById('vacation-period-error').hidden = true;
     renderProfileEstimate(profileFromForm(profileForm));
   });
   profileForm.addEventListener('change', () => {
     updateProfileRegimeFields();
+    updateProfileExtraSourceSummaries();
     renderProfileEstimate(profileFromForm(profileForm));
   });
   const extraSourceCadence = document.getElementById('extra-source-cadence');
@@ -851,7 +903,7 @@
     const source = amountInput && profileExtraSourceDraft.find(item => item.id === amountInput.dataset.extraSourceAmount);
     if (source) {
       source.amount = Number(amountInput.value) || 0;
-      amountInput.closest('.profile-extra-source-row').querySelector('.profile-extra-source-monthly strong').textContent = money(extraSourceMonthlyAmount(source));
+      updateProfileExtraSourceSummaries();
     }
     const nameInput = event.target.closest('[data-extra-source-name]');
     const namedSource = nameInput && profileExtraSourceDraft.find(item => item.id === nameInput.dataset.extraSourceName);
@@ -922,6 +974,17 @@
   profileForm.addEventListener('submit', event => {
     event.preventDefault();
     const submittedProfile = profileFromForm(event.currentTarget);
+    const vacationError = document.getElementById('vacation-period-error');
+    const hasVacationStart = Boolean(submittedProfile.vacationStartDate);
+    const hasVacationEnd = Boolean(submittedProfile.vacationEndDate);
+    if (hasVacationStart !== hasVacationEnd || (hasVacationStart && submittedProfile.vacationStartDate > submittedProfile.vacationEndDate)) {
+      document.getElementById('profile-vacation-details').open = true;
+      vacationError.hidden = false;
+      const focusField = hasVacationStart && (!hasVacationEnd || submittedProfile.vacationStartDate > submittedProfile.vacationEndDate) ? event.currentTarget.elements.vacationEndDate : event.currentTarget.elements.vacationStartDate;
+      focusField.focus();
+      return;
+    }
+    vacationError.hidden = true;
     if (contractBenefitsEligible(submittedProfile)) {
       const checks = [
         [submittedProfile.contractThirteenthEnabled, submittedProfile.contractThirteenthDate, submittedProfile.contractThirteenthPercent, 'contractThirteenthDate', 'contractThirteenthPercent'],

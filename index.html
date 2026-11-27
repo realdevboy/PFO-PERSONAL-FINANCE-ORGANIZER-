@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#f5f7f4">
   <meta name="description" content="Organize rendas fixas e variáveis, contas, gastos e metas em um só lugar.">
   <title>PFO — organização financeira</title>
-  <link rel="stylesheet" href="styles.css?v=profile-clarity-2026-11-27">
-  <script src="app.js?v=profile-clarity-2026-11-27" defer></script>
+  <link rel="stylesheet" href="styles.css?v=profile-vacation-days-2026-11-27">
+  <script src="app.js?v=profile-vacation-days-2026-11-27" defer></script>
 </head>
 <body>
   <a class="skip-link" id="skip-link" href="#page-title">Ir para o conteúdo</a>
@@ -113,10 +113,19 @@
                   <button class="button button-secondary" id="add-extra-source" type="button">Adicionar</button>
                 </div>
                 <p class="form-error" id="extra-source-error" role="alert" hidden>Informe um valor maior que zero.</p>
-                <p class="field-help profile-extra-income-note">Para valores por dia útil, usamos 22 dias como referência mensal. O valor dos benefícios fica separado do dinheiro disponível.</p>
+                <p class="field-help profile-extra-income-note">Valores por dia útil variam conforme o mês e as férias informadas. Benefícios ficam separados do dinheiro disponível; feriados não são descontados.</p>
               </details>
               <div id="profile-extra-income-list" class="profile-extra-income-list" aria-live="polite"></div>
             </div>
+            <details class="profile-calculation-details profile-vacation-details" id="profile-vacation-details">
+              <summary>Tenho férias marcadas? Informar período</summary>
+              <p class="field-help">Se recebe algum valor por dia útil, informe o início e o fim das férias. O PFO retira esses dias úteis da estimativa do mês correspondente e das previsões de renda. Feriados não são considerados.</p>
+              <div class="form-grid">
+                <label class="field">Primeiro dia das férias<input name="vacationStartDate" type="date" autocomplete="off"></label>
+                <label class="field">Último dia das férias<input name="vacationEndDate" type="date" autocomplete="off"></label>
+              </div>
+              <p class="form-error" id="vacation-period-error" role="alert" hidden>Preencha as duas datas e confira se o último dia é igual ou posterior ao primeiro.</p>
+            </details>
             <div class="profile-income-schedule" id="profile-income-schedule">
               <label class="checkbox-field"><input name="profileIncomeEnabled" type="checkbox" checked>Prever minha renda após descontos no painel</label>
               <div class="profile-income-schedule-fields" id="profile-income-schedule-fields">
