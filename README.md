@@ -9,7 +9,7 @@ Organizador financeiro pessoal em português para pessoas com renda fixa, variá
 - Registrar despesas pagas e contas futuras, e marcar contas como pagas.
 - Ver saldo disponível, entradas, gastos, contas previstas e gastos por categoria.
 - Criar metas, adicionar novos valores guardados e acompanhar o progresso.
-- Preencher um perfil financeiro com regime de trabalho, renda mensal de referência e gastos pessoais adicionados individualmente; o PFO sugere categorias pela descrição, agrupa os valores e permite ajustar cada sugestão.
+- Preencher um perfil financeiro com regime de trabalho, renda mensal de referência e gastos pessoais adicionados individualmente; o PFO sugere categorias pela descrição, agrupa os valores e permite editar valores e categorias.
 - Consultar a margem mensal estimada no perfil e na visão geral, sem misturá-la ao saldo real ou duplicar lançamentos.
 - Navegar entre meses e informar o saldo que havia nas contas no início de cada mês.
 - Usar a interface em celular ou computador.
