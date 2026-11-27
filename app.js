@@ -32,6 +32,7 @@
   const dateFromInput = value => new Date(`${value}T12:00:00`);
   const dateLabel = value => new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short' }).format(dateFromInput(value)).replace('.', '');
   const dateInputValue = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  const paymentDateValue = (year, monthIndex, paymentDay) => dateInputValue(new Date(year, monthIndex, Math.min(paymentDay, new Date(year, monthIndex + 1, 0).getDate())));
   const newId = () => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const monthEntries = () => state.entries.filter(item => item.date?.slice(0, 7) === monthKey(selectedMonth));
   const openingBalance = () => Number(state.openingBalances[monthKey(selectedMonth)]) || 0;
@@ -65,7 +66,9 @@
     const received = entries.filter(item => item.type === 'income' && item.status === 'received');
     const paid = entries.filter(item => item.type !== 'income' && item.status === 'paid');
     const pendingBills = entries.filter(item => item.type === 'bill' && item.status !== 'paid');
+    const pendingIncome = entries.filter(item => item.type === 'income' && item.status !== 'received');
     const receivedTotal = received.reduce((sum, item) => sum + Number(item.amount), 0);
+    const pendingIncomeTotal = pendingIncome.reduce((sum, item) => sum + Number(item.amount), 0);
     const paidTotal = paid.reduce((sum, item) => sum + Number(item.amount), 0);
     const pendingTotal = pendingBills.reduce((sum, item) => sum + Number(item.amount), 0);
     const savedForGoals = state.goals.reduce((sum, goal) => sum + Number(goal.saved || 0), 0);
@@ -73,8 +76,9 @@
     const available = cashBalance - pendingTotal - savedForGoals;
 
     document.getElementById('available-value').textContent = money(available);
-    document.getElementById('balance-explain').textContent = `${money(cashBalance)} em contas − ${money(pendingTotal)} em contas previstas − ${money(savedForGoals)} reservados para metas.`;
+    document.getElementById('balance-explain').textContent = `${money(cashBalance)} em contas − ${money(pendingTotal)} em contas previstas − ${money(savedForGoals)} reservados para metas. Rendas previstas entram no saldo após confirmação.`;
     document.getElementById('income-total').textContent = money(receivedTotal);
+    document.getElementById('planned-income-total').textContent = money(pendingIncomeTotal);
     document.getElementById('expense-total').textContent = money(paidTotal);
     document.getElementById('bills-total').textContent = money(pendingTotal);
 
@@ -98,15 +102,18 @@
     const incomeGroups = new Map();
     entries.filter(item => item.type === 'income').forEach(item => {
       const key = `${item.description}|${item.incomeType || 'variable'}`;
-      const current = incomeGroups.get(key) || { description: item.description, incomeType: item.incomeType || 'variable', amount: 0, pending: 0 };
+      const current = incomeGroups.get(key) || { description: item.description, incomeType: item.incomeType || 'variable', amount: 0, pending: 0, pendingDate: '' };
       current.amount += Number(item.amount);
-      if (item.status !== 'received') current.pending += Number(item.amount);
+      if (item.status !== 'received') {
+        current.pending += Number(item.amount);
+        if (!current.pendingDate || item.date < current.pendingDate) current.pendingDate = item.date;
+      }
       incomeGroups.set(key, current);
     });
     const incomeRoot = document.getElementById('income-sources');
     const incomeRows = [...incomeGroups.values()].sort((a, b) => b.amount - a.amount);
     incomeRoot.innerHTML = incomeRows.length ? incomeRows.slice(0, 4).map(item => `
-      <div class="income-source"><div><span class="source-name">${escapeHTML(item.description)}</span><span class="source-type ${item.incomeType === 'variable' ? 'variable' : ''}">${item.incomeType === 'fixed' ? 'Fixa' : 'Variável'}</span><div class="item-secondary">${item.pending ? `${money(item.pending)} prevista` : 'Recebida no mês'}</div></div><strong class="source-total">${money(item.amount)}</strong></div>`).join('') : '<div class="empty-state">Adicione uma fonte de renda para acompanhar entradas fixas e variáveis.</div>';
+      <div class="income-source"><div><span class="source-name">${escapeHTML(item.description)}</span><span class="source-type ${item.incomeType === 'variable' ? 'variable' : ''}">${item.incomeType === 'fixed' ? 'Fixa' : 'Variável'}</span><div class="item-secondary">${item.pending ? `${money(item.pending)} prevista${item.pendingDate ? ` para ${dateLabel(item.pendingDate)}` : ''}` : 'Recebida no mês'}</div></div><strong class="source-total">${money(item.amount)}</strong></div>`).join('') : '<div class="empty-state">Adicione uma fonte de renda para acompanhar entradas fixas e variáveis.</div>';
   }
 
   const profileCategories = ['Moradia', 'Alimentação', 'Contas e serviços', 'Transporte', 'Saúde', 'Educação', 'Pessoais e lazer', 'Outros'];
@@ -366,6 +373,8 @@
       workRegime: String(data.get('workRegime') || 'other'),
       grossFixedIncome,
       grossVariableIncome,
+      profileIncomeEnabled: data.get('profileIncomeEnabled') === 'on',
+      paymentDay: Number(data.get('paymentDay')) || null,
       legacyNetIncome: grossFixedIncome + grossVariableIncome > 0 ? null : state.profile.legacyNetIncome || null,
       monthsWorked: Number(data.get('monthsWorked')) || 12,
       dependents: Number(data.get('dependents')) || 0,
@@ -378,6 +387,42 @@
     };
   }
 
+  function syncProfileIncomeSchedule(profile) {
+    const today = new Date();
+    const todayKey = dateInputValue(today);
+    state.entries = state.entries.filter(item => !(item.profileGenerated && item.status !== 'received' && item.date >= todayKey));
+
+    const calculation = calculateProfileIncome(profile);
+    const paymentDay = Number(profile.paymentDay);
+    if (!profile.profileIncomeEnabled || !calculation.hasGross || calculation.needsActivity || !(calculation.monthlyNet > 0) || paymentDay < 1 || paymentDay > 31) return;
+
+    let scheduledCount = 0;
+    for (let offset = 0; offset < 13 && scheduledCount < 12; offset += 1) {
+      const monthIndex = today.getMonth() + offset;
+      const year = today.getFullYear() + Math.floor(monthIndex / 12);
+      const normalizedMonth = monthIndex % 12;
+      const date = paymentDateValue(year, normalizedMonth, paymentDay);
+      if (date < todayKey) continue;
+      const amount = roundMoney(calculation.monthlyNet);
+      const existingManualIncome = state.entries.some(item => !item.profileGenerated && item.type === 'income' && item.incomeType === 'fixed' && item.date === date && roundMoney(item.amount) === amount);
+      if (!existingManualIncome) {
+        state.entries.push({
+          id: newId(),
+          type: 'income',
+          description: 'Renda líquida do perfil',
+          amount,
+          date,
+          category: '',
+          incomeType: 'fixed',
+          status: 'planned',
+          profileGenerated: true,
+          createdAt: Date.now() + offset
+        });
+      }
+      scheduledCount += 1;
+    }
+  }
+
   function renderProfileForm() {
     const form = document.getElementById('profile-form');
     const profile = state.profile || {};
@@ -385,6 +430,8 @@
     form.elements.workRegime.value = profile.workRegime || 'clt';
     form.elements.grossFixedIncome.value = profile.grossFixedIncome ?? '';
     form.elements.grossVariableIncome.value = profile.grossVariableIncome ?? '';
+    form.elements.profileIncomeEnabled.checked = profile.profileIncomeEnabled ?? true;
+    form.elements.paymentDay.value = profile.paymentDay ?? '';
     form.elements.monthsWorked.value = profile.monthsWorked ?? 12;
     form.elements.dependents.value = profile.dependents ?? 0;
     form.elements.variableRegime.value = profile.variableRegime || 'self-employed';
@@ -430,6 +477,10 @@
     document.getElementById('profile-regime-options').hidden = !isMixed && !isMei && !isSelfEmployed && regime !== 'public-local' && regime !== 'other';
     const grossIncome = Number(form.elements.grossFixedIncome.value) + Number(form.elements.grossVariableIncome.value);
     form.elements.meiActivity.required = isMei && grossIncome > 0;
+    const incomeScheduleEnabled = form.elements.profileIncomeEnabled.checked;
+    document.getElementById('profile-income-schedule-fields').hidden = !incomeScheduleEnabled;
+    const calculation = calculateProfileIncome(profileFromForm(form));
+    form.elements.paymentDay.required = incomeScheduleEnabled && calculation.hasGross && !calculation.needsActivity && calculation.monthlyNet > 0;
   }
 
   function renderSalaryCalculation(profile) {
@@ -603,7 +654,10 @@
   document.getElementById('transaction-form').elements.incomeType.addEventListener('change', updateTransactionFields);
 
   const profileForm = document.getElementById('profile-form');
-  profileForm.addEventListener('input', () => renderProfileEstimate(profileFromForm(profileForm)));
+  profileForm.addEventListener('input', () => {
+    updateProfileRegimeFields();
+    renderProfileEstimate(profileFromForm(profileForm));
+  });
   profileForm.addEventListener('change', () => {
     updateProfileRegimeFields();
     renderProfileEstimate(profileFromForm(profileForm));
@@ -634,10 +688,12 @@
   profileForm.addEventListener('submit', event => {
     event.preventDefault();
     state.profile = profileFromForm(event.currentTarget);
+    syncProfileIncomeSchedule(state.profile);
     save();
-    renderProfileOverview();
+    renderAll();
     renderProfileEstimate(state.profile);
-    showToast('Perfil salvo. A estimativa mensal foi atualizada.');
+    const hasUpcomingProfileIncome = state.entries.some(item => item.profileGenerated && item.status !== 'received' && item.date >= dateInputValue(new Date()));
+    showToast(hasUpcomingProfileIncome ? 'Perfil salvo. Rendas previstas adicionadas ao painel.' : 'Perfil salvo. A estimativa mensal foi atualizada.');
   });
   document.getElementById('transaction-filter').addEventListener('change', renderTransactions);
 

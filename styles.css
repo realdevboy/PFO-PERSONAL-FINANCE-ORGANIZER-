@@ -80,6 +80,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .summary-row > span { display: flex; align-items: center; gap: 9px; }
 .summary-row strong { color: var(--ink); font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .legend-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--positive); }
+.planned-income-dot { background: var(--warning); }
 .expense-dot { background: #829289; }
 .planned-dot { background: #d7a144; }
 .content-grid { display: grid; grid-template-columns: 1fr; gap: 30px; }
@@ -146,6 +147,12 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .profile-section-heading h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.02em; }
 .profile-section .form-grid { max-width: 690px; }
 .profile-regime-options { margin-top: 14px; }
+.profile-income-schedule { max-width: 690px; display: grid; gap: 10px; margin-top: 16px; padding: 13px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.profile-income-schedule .checkbox-field { color: var(--ink); font-size: 14px; font-weight: 600; }
+.profile-income-schedule .checkbox-field input { width: 18px; height: 18px; flex: 0 0 auto; accent-color: var(--accent); }
+.profile-income-schedule-fields { display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr); align-items: end; gap: 14px; padding-left: 27px; }
+.profile-income-schedule-fields[hidden] { display: none; }
+.profile-income-schedule-note { margin: 0 0 8px; }
 .profile-calculation-details { max-width: 690px; margin-top: 14px; }
 .profile-calculation-details summary { width: fit-content; min-height: 38px; padding: 7px 0; color: var(--accent); cursor: pointer; font-size: 13px; font-weight: 600; }
 .profile-calculation-details summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
@@ -275,6 +282,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
   .small-action { min-height: 34px; padding: 4px 5px; font-size: 11px; }
   .page-heading .button { align-self: flex-start; }
   .form-grid { grid-template-columns: 1fr; }
+  .profile-income-schedule-fields { grid-template-columns: 1fr; padding-left: 0; }
   .field.full, .checkbox-field.full { grid-column: auto; }
   .toast { bottom: calc(72px + env(safe-area-inset-bottom)); }
 }
