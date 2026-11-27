@@ -115,6 +115,9 @@
   <dialog class="modal modal-small" id="goal-dialog" aria-labelledby="goal-dialog-title">
     <form id="goal-form" method="dialog"><div class="modal-heading"><div><p class="eyebrow">OBJETIVO FINANCEIRO</p><h2 id="goal-dialog-title">Criar meta</h2></div><button class="icon-button close-dialog" type="button" aria-label="Fechar">×</button></div><div class="form-grid"><label class="field full">Nome da meta<input name="name" required maxlength="55" placeholder="Ex.: Reserva de emergência"></label><label class="field">Valor desejado<input name="target" type="number" min="0.01" step="0.01" required placeholder="0,00"></label><label class="field">Já guardado<input name="saved" type="number" min="0" step="0.01" value="0"></label></div><div class="form-actions"><button class="button button-secondary cancel-dialog" type="button">Cancelar</button><button class="button button-primary" type="submit">Salvar meta</button></div></form>
   </dialog>
+  <dialog class="modal modal-small" id="contribution-dialog" aria-labelledby="contribution-title">
+    <form id="contribution-form" method="dialog"><div class="modal-heading"><div><p class="eyebrow">ATUALIZAR PROGRESSO</p><h2 id="contribution-title">Guardar para a meta</h2></div><button class="icon-button close-dialog" type="button" aria-label="Fechar">×</button></div><p class="form-note" id="contribution-goal-name"></p><label class="field">Valor guardado agora<input name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" required placeholder="0,00"></label><div class="form-actions"><button class="button button-secondary cancel-dialog" type="button">Cancelar</button><button class="button button-primary" type="submit">Atualizar meta</button></div></form>
+  </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </body>
 </html>

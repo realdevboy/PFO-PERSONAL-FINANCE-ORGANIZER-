@@ -8,7 +8,7 @@ Organizador financeiro pessoal em português para pessoas com renda fixa, variá
 - Repetir uma renda fixa mensalmente pelos próximos 12 meses, com os próximos recebimentos marcados como previstos.
 - Registrar despesas pagas e contas futuras, e marcar contas como pagas.
 - Ver saldo disponível, entradas, gastos, contas previstas e gastos por categoria.
-- Criar metas e acompanhar o valor guardado.
+- Criar metas, adicionar novos valores guardados e acompanhar o progresso.
 - Navegar entre meses e informar o saldo que havia nas contas no início de cada mês.
 - Usar a interface em celular ou computador.
 

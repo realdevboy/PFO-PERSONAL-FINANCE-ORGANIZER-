@@ -18,6 +18,7 @@
   }
 
   const state = loadState();
+  let activeGoalId = null;
   const money = value => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value) || 0);
   const monthKey = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
   const dateFromInput = value => new Date(`${value}T12:00:00`);
@@ -143,7 +144,7 @@
     }
     root.innerHTML = state.goals.map(goal => {
       const percent = Math.min(100, Math.round(Number(goal.saved) / Number(goal.target) * 100));
-      return `<article class="goal-card"><div class="goal-card-top"><span class="goal-icon" aria-hidden="true">◎</span><button class="goal-delete" data-delete-goal="${goal.id}" aria-label="Excluir meta ${escapeHTML(goal.name)}">Excluir</button></div><h2 class="goal-name">${escapeHTML(goal.name)}</h2><div class="goal-amounts"><span>Guardado <strong>${money(goal.saved)}</strong></span><span>Meta <strong>${money(goal.target)}</strong></span></div><div class="goal-progress" role="progressbar" aria-label="Progresso da meta ${escapeHTML(goal.name)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><span style="width:${percent}%"></span></div><div class="goal-percent">${percent}% concluído${Number(goal.saved) >= Number(goal.target) ? ' · Meta alcançada!' : ''}</div></article>`;
+      return `<article class="goal-card"><div class="goal-card-top"><span class="goal-icon" aria-hidden="true">◎</span><button class="goal-delete" data-delete-goal="${goal.id}" aria-label="Excluir meta ${escapeHTML(goal.name)}">Excluir</button></div><h2 class="goal-name">${escapeHTML(goal.name)}</h2><div class="goal-amounts"><span>Guardado <strong>${money(goal.saved)}</strong></span><span>Meta <strong>${money(goal.target)}</strong></span></div><div class="goal-progress" role="progressbar" aria-label="Progresso da meta ${escapeHTML(goal.name)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}"><span style="width:${percent}%"></span></div><div class="goal-percent">${percent}% concluído${Number(goal.saved) >= Number(goal.target) ? ' · Meta alcançada!' : ''}</div><button class="quiet-link" data-contribute="${goal.id}">＋ Guardar para esta meta</button></article>`;
     }).join('');
   }
 
@@ -172,7 +173,8 @@
   function openTransaction(kind = 'income') {
     const form = document.getElementById('transaction-form');
     form.reset();
-    form.elements.date.value = dateInputValue(today);
+    const defaultDate = monthKey(selectedMonth) === monthKey(today) ? today : selectedMonth;
+    form.elements.date.value = dateInputValue(defaultDate);
     document.getElementById('entry-kind').value = kind;
     updateTransactionFields();
     document.getElementById('transaction-dialog').showModal();
@@ -266,6 +268,16 @@
     renderAll();
     showToast('Meta criada.');
   });
+  document.getElementById('contribution-form').addEventListener('submit', event => {
+    event.preventDefault();
+    const goal = state.goals.find(item => item.id === activeGoalId);
+    if (!goal) return;
+    goal.saved = Number(goal.saved || 0) + Number(event.currentTarget.elements.amount.value);
+    save();
+    document.getElementById('contribution-dialog').close();
+    renderAll();
+    showToast('Progresso da meta atualizado.');
+  });
 
   document.body.addEventListener('click', event => {
     const completeButton = event.target.closest('[data-complete]');
@@ -291,6 +303,18 @@
       save();
       renderAll();
       showToast('Meta excluída.');
+    }
+    const contribute = event.target.closest('[data-contribute]');
+    if (contribute) {
+      activeGoalId = contribute.dataset.contribute;
+      const goal = state.goals.find(item => item.id === activeGoalId);
+      if (goal) {
+        document.getElementById('contribution-goal-name').textContent = `${goal.name} · ${money(goal.saved)} guardados de ${money(goal.target)}`;
+        const form = document.getElementById('contribution-form');
+        form.reset();
+        document.getElementById('contribution-dialog').showModal();
+        form.elements.amount.focus();
+      }
     }
   });
 
