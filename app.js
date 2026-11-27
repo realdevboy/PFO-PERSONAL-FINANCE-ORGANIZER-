@@ -348,12 +348,12 @@
     renderProfileEstimate(profileFromForm(profileForm));
     description.focus();
   });
-  document.getElementById('profile-expense-amount').addEventListener('keydown', event => {
+  [document.getElementById('profile-expense-description'), document.getElementById('profile-expense-amount')].forEach(input => input.addEventListener('keydown', event => {
     if (event.key === 'Enter') {
       event.preventDefault();
       document.getElementById('add-profile-expense').click();
     }
-  });
+  }));
   profileForm.addEventListener('submit', event => {
     event.preventDefault();
     state.profile = profileFromForm(event.currentTarget);
