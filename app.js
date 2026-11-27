@@ -101,7 +101,7 @@
       <div class="income-source"><div><span class="source-name">${escapeHTML(item.description)}</span><span class="source-type ${item.incomeType === 'variable' ? 'variable' : ''}">${item.incomeType === 'fixed' ? 'Fixa' : 'Variável'}</span><div class="item-secondary">${item.pending ? `${money(item.pending)} prevista` : 'Recebida no mês'}</div></div><strong class="source-total">${money(item.amount)}</strong></div>`).join('') : '<div class="empty-state">Adicione uma fonte de renda para acompanhar entradas fixas e variáveis.</div>';
   }
 
-  const expenseFields = ['housing', 'food', 'bills', 'transport', 'healthEducation', 'personal', 'other'];
+  const profileCategories = ['Moradia', 'Alimentação', 'Contas e serviços', 'Transporte', 'Saúde', 'Educação', 'Pessoais e lazer', 'Outros'];
   const workRegimes = {
     employee: 'Emprego assalariado',
     'self-employed': 'Autônomo(a) / freelancer',
@@ -110,11 +110,43 @@
     other: 'Outro / em transição'
   };
 
+  const legacyExpenseCategories = {
+    housing: ['Moradia', 'Valor informado anteriormente — moradia'],
+    food: ['Alimentação', 'Valor informado anteriormente — alimentação'],
+    bills: ['Contas e serviços', 'Valor informado anteriormente — contas e serviços'],
+    transport: ['Transporte', 'Valor informado anteriormente — transporte'],
+    healthEducation: ['Saúde', 'Valor informado anteriormente — saúde e educação'],
+    personal: ['Pessoais e lazer', 'Valor informado anteriormente — pessoais e lazer'],
+    other: ['Outros', 'Valor informado anteriormente — outros']
+  };
+
+  let profileExpenseDraft = Array.isArray(state.profile?.expenseItems)
+    ? state.profile.expenseItems.map(item => ({ ...item, id: String(item.id || newId()), category: profileCategories.includes(item.category) ? item.category : 'Outros' }))
+    : Object.entries(state.profile?.expenses || {}).filter(([, amount]) => Number(amount) > 0).map(([key, amount], index) => {
+      const [category, description] = legacyExpenseCategories[key] || legacyExpenseCategories.other;
+      return { id: `legacy-${index}`, description, amount: Number(amount), category, categorySource: 'manual' };
+    });
+  state.profile = { ...(state.profile || {}), expenseItems: profileExpenseDraft };
+  delete state.profile.expenses;
+
+  function classifyProfileExpense(description) {
+    const text = String(description || '').toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const rules = [
+      ['Moradia', /\b(aluguel|condominio|iptu|moradia|financiamento imobiliario|prestacao do imovel|seguro residencial)\b/],
+      ['Alimentação', /\b(mercado|supermercado|feira|padaria|acougue|restaurante|lanchonete|almoco|jantar|ifood|delivery|alimentacao)\b/],
+      ['Contas e serviços', /\b(agua|luz|energia|eletricidade|internet|telefone|celular|gas|streaming|assinatura|seguro do carro|seguro residencial)\b/],
+      ['Transporte', /\b(uber|99|taxi|combustivel|gasolina|etanol|onibus|metro|estacionamento|pedagio|transporte|passagem)\b/],
+      ['Saúde', /\b(farmacia|remedio|consulta|medico|saude|dentista|terapia|plano de saude|exame)\b/],
+      ['Educação', /\b(escola|faculdade|curso|material escolar|educacao|idiomas|mensalidade escolar)\b/],
+      ['Pessoais e lazer', /\b(cinema|viagem|lazer|academia|roupa|vestuario|beleza|cabeleireiro|barbearia|hobby|show|livro)\b/]
+    ];
+    return rules.find(([, pattern]) => pattern.test(text))?.[0] || 'Outros';
+  }
+
   function profileTotals(profile) {
     const fixedIncome = Number(profile.fixedIncome) || 0;
     const variableIncome = Number(profile.variableIncome) || 0;
-    const expenses = profile.expenses || {};
-    const monthlyExpenses = expenseFields.reduce((total, key) => total + (Number(expenses[key]) || 0), 0);
+    const monthlyExpenses = (profile.expenseItems || []).reduce((total, item) => total + (Number(item.amount) || 0), 0);
     const monthlyIncome = fixedIncome + variableIncome;
     return { fixedIncome, variableIncome, monthlyIncome, monthlyExpenses, estimatedMargin: monthlyIncome - monthlyExpenses };
   }
@@ -132,19 +164,18 @@
       root.innerHTML = '<div class="profile-empty"><span>Complete o perfil com sua renda e seus gastos mensais de referência para ver uma estimativa aqui.</span><button class="text-button" data-go="profile">Preencher perfil <span aria-hidden="true">→</span></button></div>';
       return;
     }
-    root.innerHTML = `<div class="profile-regime">${escapeHTML(workRegimes[state.profile.workRegime] || workRegimes.other)}${state.profile.name ? ` · ${escapeHTML(state.profile.name)}` : ''}</div><div class="profile-metrics">${profileMetricsHTML(state.profile, true)}</div>`;
+    root.innerHTML = `<div class="profile-regime">${escapeHTML(workRegimes[state.profile.workRegime] || workRegimes.other)}${state.profile.name ? ` · ${escapeHTML(state.profile.name)}` : ''}</div><div class="profile-metrics">${profileMetricsHTML(state.profile, true)}</div><div class="profile-category-totals">${profileCategoryTotalsHTML(state.profile.expenseItems || [])}</div>`;
   }
 
   function profileFromForm(form) {
     const data = new FormData(form);
-    const expenses = Object.fromEntries(expenseFields.map(key => [key, Number(data.get(key)) || 0]));
     return {
       saved: true,
       name: String(data.get('name') || '').trim(),
       workRegime: String(data.get('workRegime') || 'other'),
       fixedIncome: Number(data.get('fixedIncome')) || 0,
       variableIncome: Number(data.get('variableIncome')) || 0,
-      expenses
+      expenseItems: profileExpenseDraft.map(item => ({ ...item }))
     };
   }
 
@@ -155,12 +186,38 @@
     form.elements.workRegime.value = profile.workRegime || 'employee';
     form.elements.fixedIncome.value = profile.fixedIncome ?? '';
     form.elements.variableIncome.value = profile.variableIncome ?? '';
-    expenseFields.forEach(key => { form.elements[key].value = profile.expenses?.[key] ?? ''; });
+    renderProfileExpenseList();
     renderProfileEstimate(profile.saved ? profile : profileFromForm(form));
   }
 
   function renderProfileEstimate(profile) {
     document.getElementById('profile-estimate').innerHTML = `<div class="profile-metrics">${profileMetricsHTML(profile)}</div>`;
+    renderProfileExpenseSummary(profile.expenseItems || []);
+  }
+
+  function profileCategoryTotalsHTML(items) {
+    const totals = new Map();
+    items.forEach(item => totals.set(item.category || 'Outros', (totals.get(item.category || 'Outros') || 0) + (Number(item.amount) || 0)));
+    return [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([category, amount]) => `<span class="profile-category-total"><span>${escapeHTML(category)}</span><strong>${money(amount)}</strong></span>`).join('');
+  }
+
+  function renderProfileExpenseSummary(items) {
+    const root = document.getElementById('profile-expense-summary');
+    if (!root) return;
+    const summary = profileCategoryTotalsHTML(items);
+    root.innerHTML = summary || '<span class="profile-list-empty">As despesas adicionadas serão agrupadas aqui por categoria.</span>';
+  }
+
+  function renderProfileExpenseList() {
+    const root = document.getElementById('profile-expense-list');
+    if (!root) return;
+    root.innerHTML = profileExpenseDraft.length ? profileExpenseDraft.map(item => `
+      <article class="profile-expense-row">
+        <div class="profile-expense-description"><strong>${escapeHTML(item.description)}</strong><span>${item.categorySource === 'auto' ? 'Categoria identificada pela descrição' : 'Categoria'}</span></div>
+        <strong class="profile-expense-amount">${money(item.amount)}</strong>
+        <label class="profile-expense-category"><span class="sr-only">Categoria para ${escapeHTML(item.description)}</span><select data-profile-category="${escapeHTML(item.id)}" aria-label="Categoria para ${escapeHTML(item.description)}">${profileCategories.map(category => `<option${item.category === category ? ' selected' : ''}>${category}</option>`).join('')}</select></label>
+        <button class="small-action delete" type="button" data-remove-profile-expense="${escapeHTML(item.id)}" aria-label="Remover despesa ${escapeHTML(item.description)}">Remover</button>
+      </article>`).join('') : '<div class="profile-list-empty">Você ainda não adicionou despesas.</div>';
   }
 
   function renderTransactions() {
@@ -274,6 +331,29 @@
   const profileForm = document.getElementById('profile-form');
   profileForm.addEventListener('input', () => renderProfileEstimate(profileFromForm(profileForm)));
   profileForm.addEventListener('change', () => renderProfileEstimate(profileFromForm(profileForm)));
+  document.getElementById('add-profile-expense').addEventListener('click', () => {
+    const description = document.getElementById('profile-expense-description');
+    const amount = document.getElementById('profile-expense-amount');
+    const cleanDescription = description.value.trim();
+    const numericAmount = Number(amount.value);
+    if (!cleanDescription || !numericAmount || numericAmount < 0) {
+      showToast('Informe a descrição e o valor mensal da despesa.');
+      (!cleanDescription ? description : amount).focus();
+      return;
+    }
+    profileExpenseDraft.push({ id: newId(), description: cleanDescription, amount: numericAmount, category: classifyProfileExpense(cleanDescription), categorySource: 'auto' });
+    description.value = '';
+    amount.value = '';
+    renderProfileExpenseList();
+    renderProfileEstimate(profileFromForm(profileForm));
+    description.focus();
+  });
+  document.getElementById('profile-expense-amount').addEventListener('keydown', event => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      document.getElementById('add-profile-expense').click();
+    }
+  });
   profileForm.addEventListener('submit', event => {
     event.preventDefault();
     state.profile = profileFromForm(event.currentTarget);
@@ -358,6 +438,12 @@
   });
 
   document.body.addEventListener('click', event => {
+    const removeProfileExpense = event.target.closest('[data-remove-profile-expense]');
+    if (removeProfileExpense) {
+      profileExpenseDraft = profileExpenseDraft.filter(item => item.id !== removeProfileExpense.dataset.removeProfileExpense);
+      renderProfileExpenseList();
+      renderProfileEstimate(profileFromForm(profileForm));
+    }
     const completeButton = event.target.closest('[data-complete]');
     if (completeButton) {
       const entry = state.entries.find(item => item.id === completeButton.dataset.complete);
@@ -394,6 +480,17 @@
         form.elements.amount.focus();
       }
     }
+  });
+
+  document.body.addEventListener('change', event => {
+    const categorySelect = event.target.closest('[data-profile-category]');
+    if (!categorySelect) return;
+    const item = profileExpenseDraft.find(expense => expense.id === categorySelect.dataset.profileCategory);
+    if (!item) return;
+    item.category = categorySelect.value;
+    item.categorySource = 'manual';
+    renderProfileExpenseList();
+    renderProfileEstimate(profileFromForm(profileForm));
   });
 
   document.querySelectorAll('.modal').forEach(dialog => {
