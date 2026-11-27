@@ -437,13 +437,14 @@
       return;
     }
     const meiOnly = result.regime === 'mei';
-    const mixedMei = result.regime === 'mixed' && result.independentGross > 0 && profile.variableRegime === 'mei';
-    const contributionLabel = meiOnly ? 'DAS-MEI estimado' : mixedMei ? 'INSS + DAS-MEI' : result.regime === 'public-federal' || result.regime === 'public-local' ? 'Previdência / RPPS' : 'INSS estimado';
+    const contributionLabel = result.regime === 'public-federal' || result.regime === 'public-local' ? 'Previdência / RPPS' : 'INSS / contribuição previdenciária';
+    const totalDeductions = roundMoney(result.pension + result.irrf + result.otherDeductions);
     const metrics = [
       ['Renda bruta mensal', money(result.gross)],
-      [contributionLabel, money(meiOnly || mixedMei ? result.pension + result.otherDeductions : result.pension)],
+      [meiOnly ? 'DAS — parcela previdenciária' : contributionLabel, money(result.pension)],
       ['IRRF estimado', money(result.irrf)],
-      ...(result.otherDeductions && !meiOnly ? [['Outros tributos/descontos', money(result.otherDeductions)]] : []),
+      ...(meiOnly || (result.regime === 'mixed' && profile.variableRegime === 'mei') ? [['DAS — ICMS/ISS', money(result.otherDeductions)]] : result.otherDeductions ? [['Outros descontos informados', money(result.otherDeductions)]] : []),
+      ['Total descontado estimado', money(totalDeductions)],
       ['Renda após descontos estimados', money(result.monthlyNet)]
     ];
     const reserveMarkup = result.reserves ? `
@@ -454,7 +455,7 @@
         <article class="salary-benefit"><h3>Férias + 1/3 estimadas</h3><div><span>Total bruto</span><strong>${money(result.vacation.gross)}</strong></div><div><span>Adicional de 1/3 incluído</span><strong>${money(result.vacation.bonus)}</strong></div><div><span>INSS / previdência + IRRF</span><strong>${money(result.vacation.pension + result.vacation.irrf)}</strong></div><div><span>Líquido estimado</span><strong>${money(result.vacation.net)}</strong></div></article>
       </div>${reserveMarkup}` : reserveMarkup;
     const notes = result.notes.map(note => `<p class="salary-note">${escapeHTML(note)}</p>`).join('');
-    root.innerHTML = `<div class="salary-calculation-heading"><strong>Simulação estimada · tabelas ${TAX_YEAR}</strong><span>Os valores podem variar conforme folha, deduções e regras do órgão.</span></div><div class="salary-metrics">${metrics.map(([label, value], index) => `<div class="salary-metric ${index === metrics.length - 1 ? 'salary-metric-net' : ''}"><span>${label}</span><strong>${value}</strong></div>`).join('')}</div>${benefitMarkup}${notes}`;
+    root.innerHTML = `<div class="salary-calculation-heading"><strong>Confira os descontos antes de salvar</strong><span>Prévia atualizada ao preencher · estimativa pelas regras de ${TAX_YEAR}</span></div><div class="salary-metrics">${metrics.map(([label, value], index) => `<div class="salary-metric ${label.startsWith('Total descontado') ? 'salary-metric-total' : ''} ${index === metrics.length - 1 ? 'salary-metric-net' : ''}"><span>${label}</span><strong>${value}</strong></div>`).join('')}</div>${benefitMarkup}${notes}`;
   }
 
   function profileCategoryTotalsHTML(items) {
